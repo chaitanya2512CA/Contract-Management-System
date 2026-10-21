@@ -138,6 +138,39 @@ node test-flows.js
 
 ---
 
+## Deployment to Vercel
+
+CampusPulse includes a production-ready `vercel.json` configuration at the repository root with Vite framework detection, automated client build commands, and single-page application (SPA) client-side routing rewrites.
+
+### Option A: Connect via Vercel Web Dashboard (Recommended)
+
+1. Go to [Vercel Dashboard](https://vercel.com/new).
+2. Click **Add New Project** and select **Import Git Repository**.
+3. Choose the repository: `yashhl16/EventManagementSystem`.
+4. Configure Project Settings:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `./` (default)
+   - **Build Command**: `npm --prefix client run build` (auto-detected from `vercel.json`)
+   - **Output Directory**: `client/dist` (auto-detected from `vercel.json`)
+5. **Environment Variables**:
+   - `VITE_API_URL`: URL of your deployed backend API (e.g., `https://your-backend-api.onrender.com/api` or `https://api.yourdomain.com/api`).
+     *(If deploying full-stack or proxying, leave blank or point to your production API).*
+6. Click **Deploy**. Vercel will build and serve your production application with automatic SSL and global CDN distribution.
+
+### Option B: Deploy via Vercel CLI
+
+In your terminal:
+```bash
+# 1. Log in to Vercel
+npx vercel login
+
+# 2. Deploy to Production
+npx vercel --prod
+```
+
+---
+
 ## License
 
 CampusPulse is developed for higher education institutions and university campus councils.
+
