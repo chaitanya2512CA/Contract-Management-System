@@ -32,10 +32,25 @@ export const OrganizerLoginPage: React.FC = () => {
       await loginOrganizer({ email: email.trim(), password });
       navigate('/organizer/dashboard');
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.message ||
-          'Authentication failed. Invalid organizer credentials or role.'
-      );
+      console.warn('[OrganizerLogin] Authentication attempt failed:', {
+        status: err.response?.status,
+        code: err.code,
+        message: err.response?.data?.message || err.message,
+      });
+
+      if (err.response?.data?.message) {
+        setErrorMessage(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setErrorMessage(
+          'Unable to reach the authentication server. Please ensure the backend server is running on port 5000 or check your network connection.'
+        );
+      } else if (err.response?.status === 503) {
+        setErrorMessage(
+          err.response?.data?.message || 'Database service unavailable. Please check the database connection.'
+        );
+      } else {
+        setErrorMessage('Authentication failed. Invalid organizer credentials or role.');
+      }
     } finally {
       setIsLoading(false);
     }

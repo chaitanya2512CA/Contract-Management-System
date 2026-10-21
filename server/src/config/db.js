@@ -21,10 +21,10 @@ export const connectDB = async () => {
 
     // If running on Vercel or in cloud serverless, do not download binaries
     if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-      console.error(
-        '[DB] Production environment detected. Please ensure MONGO_URI is configured with a valid MongoDB cluster (e.g. MongoDB Atlas).'
+      console.warn(
+        '[DB] Production environment detected. MONGO_URI could not be connected. Please verify MONGO_URI in your deployment environment variables.'
       );
-      throw error;
+      return;
     }
 
     // In local development, launch embedded MongoDB Memory Server

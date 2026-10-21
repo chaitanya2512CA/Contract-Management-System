@@ -19,12 +19,17 @@ export const ForgotPasswordPage: React.FC = () => {
 
     try {
       const res = await authService.forgotPassword(email.trim());
-      setSuccessMessage(
-        res.data.message ||
-          'If an account exists with this email, password reset instructions have been dispatched.'
-      );
+      setSuccessMessage(res.data.message);
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.message || 'Error processing password reset request.');
+      if (err.response?.data?.message) {
+        setErrorMessage(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setErrorMessage(
+          'Unable to reach the authentication server. Please ensure the backend server is running on port 5000.'
+        );
+      } else {
+        setErrorMessage('Error processing password recovery request. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

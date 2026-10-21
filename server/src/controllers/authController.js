@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { AuditLog } from '../models/AuditLog.js';
@@ -57,6 +58,13 @@ export const registerStudent = async (req, res) => {
       });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
+      });
+    }
+
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({
@@ -98,6 +106,13 @@ export const registerOrganizer = async (req, res) => {
       });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
+      });
+    }
+
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({
@@ -135,6 +150,13 @@ export const loginStudent = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide both email and password.',
+      });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
       });
     }
 
@@ -192,6 +214,13 @@ export const loginOrganizer = async (req, res) => {
       });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
+      });
+    }
+
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
       return res.status(401).json({
@@ -245,6 +274,13 @@ export const loginAdmin = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Administrator email and password are required.',
+      });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
       });
     }
 
@@ -393,24 +429,30 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ success: false, message: 'Please provide your registered email.' });
+      return res.status(400).json({ success: false, message: 'Please provide your registered email address.' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is currently unavailable. Please verify the database connection.',
+      });
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      // Safe response
-      return res.status(200).json({
-        success: true,
-        message: 'If an account exists with that email, reset instructions have been sent.',
+      return res.status(404).json({
+        success: false,
+        message: 'No registered student account found with this email address. Please register for an account.',
       });
     }
 
-    // In local development, return a simulation message
+    // Honest guidance: automated email dispatch is not configured in this demo
     res.status(200).json({
       success: true,
-      message: 'A password reset link has been dispatched to your email address (simulated for campus demo).',
+      message: `Account found for ${user.name}. In this campus demo environment, automated email dispatch is not enabled. Please sign in using the configured demo credentials (student@college.edu / Student@12345) or contact the campus administrator at admin@college.edu.`,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error processing password reset.' });
+    res.status(500).json({ success: false, message: 'Error processing password reset request.' });
   }
 };

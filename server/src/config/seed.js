@@ -12,27 +12,108 @@ import { generateTicketCode, generateCertificateCode, generateQRCodeDataUrl } fr
 
 dotenv.config();
 
+/**
+ * Idempotently verify and seed core demo accounts across all three roles:
+ * - Admin: admin@college.edu / Admin@12345
+ * - Student: student@college.edu / Student@12345
+ * - Organizer: organizer@college.edu / Organizer@12345
+ */
+export const ensureDemoAccounts = async () => {
+  // 1. Ensure Super Administrator
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@college.edu').toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@12345';
+  let admin = await User.findOne({ email: adminEmail }).select('+password');
+  if (!admin) {
+    admin = await User.create({
+      name: process.env.ADMIN_NAME || 'Chief Campus Administrator',
+      email: adminEmail,
+      password: adminPassword,
+      role: 'admin',
+      adminId: process.env.ADMIN_ID || 'ADM-2026-001',
+      department: 'Campus Administration',
+      phone: '+1 (555) 019-2834',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
+      bio: 'Oversees campus technical councils, student organization approvals, and inter-collegiate event compliance.',
+      isActive: true,
+    });
+    console.log(`[Seed] Super Administrator created (${adminEmail}).`);
+  } else {
+    const isMatch = await admin.comparePassword(adminPassword);
+    if (!isMatch || !admin.isActive) {
+      admin.password = adminPassword;
+      admin.isActive = true;
+      await admin.save();
+      console.log(`[Seed] Super Administrator credentials synced (${adminEmail}).`);
+    }
+  }
+
+  // 2. Ensure Demo Student
+  const studentEmail = 'student@college.edu';
+  const studentPassword = 'Student@12345';
+  let student = await User.findOne({ email: studentEmail }).select('+password');
+  if (!student) {
+    student = await User.create({
+      name: 'Alex Rivera',
+      email: studentEmail,
+      password: studentPassword,
+      role: 'student',
+      studentId: 'CS-2024-0042',
+      department: 'Computer Science & Engineering',
+      graduationYear: 2026,
+      phone: '+1 (555) 432-1098',
+      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=300',
+      bio: '3rd year CS undergrad. Full-stack enthusiast, hackathon addict, and cloud architect aspirant.',
+      interests: ['Hackathons', 'Artificial Intelligence', 'Web Development', 'Robotics'],
+      isActive: true,
+    });
+    console.log(`[Seed] Demo Student created (${studentEmail}).`);
+  } else {
+    const isMatch = await student.comparePassword(studentPassword);
+    if (!isMatch || !student.isActive) {
+      student.password = studentPassword;
+      student.isActive = true;
+      await student.save();
+      console.log(`[Seed] Demo Student credentials verified and synced (${studentEmail}).`);
+    }
+  }
+
+  // 3. Ensure Demo Organizer
+  const organizerEmail = 'organizer@college.edu';
+  const organizerPassword = 'Organizer@12345';
+  let organizer = await User.findOne({ email: organizerEmail }).select('+password');
+  if (!organizer) {
+    organizer = await User.create({
+      name: 'Dr. Sarah Mitchell',
+      email: organizerEmail,
+      password: organizerPassword,
+      role: 'organizer',
+      employeeId: 'FAC-ENG-402',
+      department: 'Computer Science & Engineering',
+      organizationName: 'ACM Student Chapter & Coding Club',
+      phone: '+1 (555) 345-6789',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
+      bio: 'Faculty advisor for ACM Chapter. Passionate about hackathons, competitive programming, and AI research.',
+      isActive: true,
+    });
+    console.log(`[Seed] Demo Organizer created (${organizerEmail}).`);
+  } else {
+    const isMatch = await organizer.comparePassword(organizerPassword);
+    if (!isMatch || !organizer.isActive) {
+      organizer.password = organizerPassword;
+      organizer.isActive = true;
+      await organizer.save();
+      console.log(`[Seed] Demo Organizer credentials verified and synced (${organizerEmail}).`);
+    }
+  }
+};
+
 export const seedDatabase = async () => {
   try {
     console.log('[Seed] Checking database collections...');
     const userCount = await User.countDocuments();
     if (userCount > 0) {
-      console.log(`[Seed] Database already contains ${userCount} users. Ensuring admin exists...`);
-      // Ensure super admin exists
-      const adminEmail = process.env.ADMIN_EMAIL || 'admin@college.edu';
-      const adminExists = await User.findOne({ email: adminEmail });
-      if (!adminExists) {
-        await User.create({
-          name: process.env.ADMIN_NAME || 'Chief Campus Administrator',
-          email: adminEmail,
-          password: process.env.ADMIN_PASSWORD || 'Admin@12345',
-          role: 'admin',
-          adminId: process.env.ADMIN_ID || 'ADM-2026-001',
-          department: 'Campus Administration',
-          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
-        });
-        console.log(`[Seed] Super Administrator account created (${adminEmail}).`);
-      }
+      console.log(`[Seed] Database already contains ${userCount} users. Ensuring core demo accounts...`);
+      await ensureDemoAccounts();
       return;
     }
 

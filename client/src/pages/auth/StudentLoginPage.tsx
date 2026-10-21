@@ -33,9 +33,27 @@ export const StudentLoginPage: React.FC = () => {
       await loginStudent({ email: email.trim(), password });
       navigate('/student/dashboard');
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.message || 'Invalid email or password. Please verify your credentials.'
-      );
+      console.warn('[StudentLogin] Authentication attempt failed:', {
+        status: err.response?.status,
+        code: err.code,
+        message: err.response?.data?.message || err.message,
+      });
+
+      if (err.response?.data?.message) {
+        setErrorMessage(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setErrorMessage(
+          'Unable to reach the authentication server. Please ensure the backend server is running on port 5000 or check your network connection.'
+        );
+      } else if (err.response?.status === 503) {
+        setErrorMessage(
+          err.response?.data?.message || 'Database service unavailable. Please check the database connection.'
+        );
+      } else if (err.response?.status === 401) {
+        setErrorMessage('Invalid email or password. Please verify your credentials.');
+      } else {
+        setErrorMessage('An unexpected error occurred during sign in. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
