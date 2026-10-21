@@ -1,0 +1,177 @@
+export type UserRole = 'student' | 'organizer' | 'admin';
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  studentId?: string;
+  employeeId?: string;
+  adminId?: string;
+  department?: string;
+  graduationYear?: number;
+  phone?: string;
+  avatar?: string;
+  bio?: string;
+  interests?: string[];
+  organizationName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type EventCategory =
+  | 'Technical'
+  | 'Hackathon'
+  | 'Workshop'
+  | 'Seminar'
+  | 'Cultural'
+  | 'Sports'
+  | 'Conference'
+  | 'Webinar';
+
+export type EventStatus =
+  | 'pending_approval'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'completed';
+
+export interface CollegeEvent {
+  _id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  bannerImage: string;
+  eventDate: string;
+  startTime: string;
+  endTime: string;
+  venue: string;
+  venueType: 'offline' | 'online' | 'hybrid';
+  meetingUrl?: string;
+  organizer: User | string;
+  organizerName?: string;
+  organizerContact?: string;
+  maxCapacity: number;
+  registeredCount: number;
+  waitlistCount?: number;
+  availableSeats?: number;
+  isRegistrationOpen?: boolean;
+  registrationDeadline: string;
+  isPaid: boolean;
+  ticketPrice: number;
+  eligibility: string;
+  prerequisites?: string;
+  isTeamEvent: boolean;
+  teamMinSize?: number;
+  teamMaxSize?: number;
+  status: EventStatus;
+  rejectionReason?: string;
+  tags: string[];
+  views: number;
+  featured: boolean;
+  ratingAverage?: number;
+  ratingCount?: number;
+  createdAt: string;
+}
+
+export type RegistrationStatus = 'registered' | 'waitlisted' | 'attended' | 'cancelled';
+
+export interface Registration {
+  _id: string;
+  event: CollegeEvent;
+  user: User;
+  ticketCode: string;
+  registrationType: 'individual' | 'team';
+  teamName?: string;
+  team?: {
+    _id: string;
+    teamName: string;
+    joinCode: string;
+  };
+  status: RegistrationStatus;
+  qrCodeData: string;
+  registeredAt: string;
+  attendedAt?: string;
+  certificateIssued?: boolean;
+  certificate?: string | Certificate;
+  feedbackRating?: number;
+  feedbackComment?: string;
+}
+
+export interface Certificate {
+  _id: string;
+  certificateCode: string;
+  event: CollegeEvent | string;
+  user: User | string;
+  studentName: string;
+  eventTitle: string;
+  eventDate: string;
+  category: string;
+  issueDate: string;
+  issuedBy?: User | string;
+  issuerOrganization: string;
+  status: 'valid' | 'revoked';
+}
+
+export interface Announcement {
+  _id: string;
+  title: string;
+  content: string;
+  author: User;
+  authorName: string;
+  authorRole: string;
+  event?: string | CollegeEvent;
+  eventTitle?: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  targetAudience: 'all' | 'students' | 'organizers' | 'registered_participants';
+  isPinned: boolean;
+  createdAt: string;
+}
+
+export interface AppNotification {
+  _id: string;
+  recipient: string;
+  title: string;
+  message: string;
+  type: 'event_approval' | 'event_update' | 'registration' | 'cancellation' | 'announcement' | 'certificate' | 'system';
+  link?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AuditLogItem {
+  _id: string;
+  admin: User | string;
+  adminName: string;
+  adminEmail: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  targetName?: string;
+  details: string;
+  ipAddress: string;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  users: {
+    students: number;
+    organizers: number;
+    admins: number;
+    total: number;
+  };
+  events: {
+    total: number;
+    pending: number;
+    approved: number;
+    cancelled: number;
+  };
+  participation: {
+    totalRegistrations: number;
+    totalAttended: number;
+    attendanceRate: number;
+  };
+  categoryStats: { category: string; count: number; totalRegistrations: number }[];
+  monthlyRegistrations: { month: string; registrations: number; attended: number }[];
+  recentLogs: AuditLogItem[];
+}

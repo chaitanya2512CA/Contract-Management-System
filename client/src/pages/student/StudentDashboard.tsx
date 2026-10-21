@@ -1,0 +1,291 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Sparkles,
+  Calendar,
+  Award,
+  CheckCircle2,
+  TrendingUp,
+  Compass,
+  ArrowRight,
+  Filter,
+} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { CollegeEvent, Registration } from '../../types';
+import { eventService, registrationService } from '../../services/api';
+import { EventCard } from '../../components/events/EventCard';
+import { EventFilters } from '../../components/events/EventFilters';
+import { StatCard } from '../../components/common/StatCard';
+import { EventCardSkeleton } from '../../components/common/LoadingSkeleton';
+import { EmptyState } from '../../components/common/EmptyState';
+
+export const StudentDashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    registered: 0,
+    attended: 0,
+    certificates: 0,
+  });
+
+  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
+  const [trendingEvents, setTrendingEvents] = useState<CollegeEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<CollegeEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Filters state
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('All');
+  const [price, setPrice] = useState('all');
+  const [venueType, setVenueType] = useState('all');
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        const [recRes, trendRes, myRegRes, eventsRes] = await Promise.all([
+          eventService.getRecommendedEvents().catch(() => ({ data: { recommendations: [] } })),
+          eventService.getTrendingEvents().catch(() => ({ data: { events: [] } })),
+          registrationService.getMyRegistrations().catch(() => ({ data: { registrations: [] } })),
+          eventService.getEvents({ limit: 12 }).catch(() => ({ data: { events: [] } })),
+        ]);
+
+        setAiRecommendations(recRes.data?.recommendations || []);
+        setTrendingEvents(trendRes.data?.events || []);
+        setAllEvents(eventsRes.data?.events || []);
+
+        const myRegs: Registration[] = myRegRes.data?.registrations || [];
+        const attendedCount = myRegs.filter((r) => r.status === 'attended').length;
+        const certCount = myRegs.filter((r) => r.certificateIssued).length;
+
+        setStats({
+          registered: myRegs.filter((r) => r.status === 'registered').length,
+          attended: attendedCount,
+          certificates: certCount,
+        });
+      } catch (err) {
+        console.error('Error loading student dashboard data', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
+  // Filter events dynamically
+  const filteredEvents = allEvents.filter((event) => {
+    const matchesSearch =
+      !search ||
+      event.title.toLowerCase().includes(search.toLowerCase()) ||
+      event.description.toLowerCase().includes(search.toLowerCase()) ||
+      event.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase())) ||
+      event.venue.toLowerCase().includes(search.toLowerCase());
+
+    const matchesCategory = category === 'All' || event.category === category;
+    const matchesPrice =
+      price === 'all' ||
+      (price === 'true' && event.isPaid) ||
+      (price === 'false' && !event.isPaid);
+    const matchesVenue = venueType === 'all' || event.venueType === venueType;
+
+    return matchesSearch && matchesCategory && matchesPrice && matchesVenue;
+  });
+
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Welcome Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-600 p-6 sm:p-10 text-white shadow-xl shadow-indigo-200 dark:shadow-none">
+        <div className="relative z-10 max-w-2xl">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-md">
+              Student Dashboard
+            </span>
+            <span className="text-xs text-indigo-100">
+              {user?.department} • Year of {user?.graduationYear}
+            </span>
+          </div>
+
+          <h1 className="mt-3 text-2xl sm:text-4xl font-extrabold tracking-tight">
+            Welcome back, {user?.name?.split(' ')[0]}! 🎓
+          </h1>
+
+          <p className="mt-2 text-xs sm:text-sm text-indigo-100 leading-relaxed">
+            Discover upcoming hackathons, earn verified participation certificates, and never miss a campus deadline.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              to="/events"
+              className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+            >
+              Browse Campus Events
+            </Link>
+            <Link
+              to="/my-events"
+              className="rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
+            >
+              View My Passes & Tickets
+            </Link>
+          </div>
+        </div>
+
+        {/* Ambient decorative element */}
+        <div className="absolute -right-12 -bottom-12 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          title="Active Registrations"
+          value={stats.registered}
+          subtitle="Upcoming confirmed seats"
+          icon={<Calendar className="h-5 w-5" />}
+          color="indigo"
+        />
+        <StatCard
+          title="Sessions Attended"
+          value={stats.attended}
+          subtitle="QR verified attendances"
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          color="emerald"
+        />
+        <StatCard
+          title="Certificates Earned"
+          value={stats.certificates}
+          subtitle="Official verified credentials"
+          icon={<Award className="h-5 w-5" />}
+          color="purple"
+        />
+      </div>
+
+      {/* AI Recommendations Section */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Curated AI Recommendations
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Ranked using your academic interests ({user?.interests?.join(', ') || 'General'})
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/profile"
+            className="text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Edit Interests →
+          </Link>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <EventCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : aiRecommendations.length === 0 ? (
+          <EmptyState
+            title="No custom recommendations yet"
+            description="Add more interests to your profile to help our recommendation engine tailor events for you."
+            action={
+              <Link
+                to="/profile"
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+              >
+                Customize Interests
+              </Link>
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {aiRecommendations.slice(0, 4).map((rec) => (
+              <EventCard
+                key={rec.event._id}
+                event={rec.event}
+                matchScore={rec.matchPercentage}
+                recommendationReason={rec.recommendationReason}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Trending On Campus Section */}
+      {trendingEvents.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Trending Campus Activities
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {trendingEvents.slice(0, 3).map((event) => (
+              <EventCard key={event._id} event={event} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* All Events with Filters Section */}
+      <section className="space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Discover All College Events
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Filter by department, category, format, and pricing
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Widget */}
+        <EventFilters
+          search={search}
+          onSearchChange={setSearch}
+          selectedCategory={category}
+          onCategoryChange={setCategory}
+          selectedPrice={price}
+          onPriceChange={setPrice}
+          selectedVenueType={venueType}
+          onVenueTypeChange={setVenueType}
+          onReset={() => {
+            setSearch('');
+            setCategory('All');
+            setPrice('all');
+            setVenueType('all');
+          }}
+        />
+
+        {/* Filtered Grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <EventCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filteredEvents.length === 0 ? (
+          <EmptyState
+            title="No events match your filter criteria"
+            description="Try loosening your filters or searching for different keywords."
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredEvents.map((event) => (
+              <EventCard key={event._id} event={event} />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};

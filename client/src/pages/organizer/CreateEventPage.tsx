@@ -1,0 +1,477 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Image,
+  Users,
+  DollarSign,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+} from 'lucide-react';
+import { eventService } from '../../services/api';
+import { Button } from '../../components/common/Button';
+
+const CATEGORIES = [
+  'Technical',
+  'Hackathon',
+  'Workshop',
+  'Seminar',
+  'Cultural',
+  'Sports',
+  'Conference',
+  'Webinar',
+];
+
+const PRESET_BANNERS = [
+  {
+    name: 'Hackathon / Coding',
+    url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=1200',
+  },
+  {
+    name: 'AI & Data Science',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=1200',
+  },
+  {
+    name: 'Robotics & Hardware',
+    url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200',
+  },
+  {
+    name: 'Cultural & Music Fest',
+    url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=1200',
+  },
+  {
+    name: 'Seminar / Conference',
+    url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200',
+  },
+];
+
+export const CreateEventPage: React.FC = () => {
+  const navigate = useNavigate();
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [bannerImage, setBannerImage] = useState(PRESET_BANNERS[0].url);
+  const [eventDate, setEventDate] = useState('');
+  const [startTime, setStartTime] = useState('10:00 AM');
+  const [endTime, setEndTime] = useState('04:00 PM');
+  const [venue, setVenue] = useState('Main Auditorium');
+  const [venueType, setVenueType] = useState<'offline' | 'online' | 'hybrid'>('offline');
+  const [meetingUrl, setMeetingUrl] = useState('');
+  const [maxCapacity, setMaxCapacity] = useState('100');
+  const [registrationDeadline, setRegistrationDeadline] = useState('');
+  const [isPaid, setIsPaid] = useState(false);
+  const [ticketPrice, setTicketPrice] = useState('0');
+  const [eligibility, setEligibility] = useState('Open to all college students');
+  const [prerequisites, setPrerequisites] = useState('None');
+  const [isTeamEvent, setIsTeamEvent] = useState(false);
+  const [teamMinSize, setTeamMinSize] = useState('2');
+  const [teamMaxSize, setTeamMaxSize] = useState('4');
+  const [tags, setTags] = useState('Technology, Hackathons, Innovation');
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setIsLoading(true);
+
+    try {
+      const res = await eventService.createEvent({
+        title,
+        description,
+        category,
+        bannerImage,
+        eventDate,
+        startTime,
+        endTime,
+        venue,
+        venueType,
+        meetingUrl: venueType !== 'offline' ? meetingUrl : '',
+        maxCapacity: Number(maxCapacity),
+        registrationDeadline,
+        isPaid,
+        ticketPrice: isPaid ? Number(ticketPrice) : 0,
+        eligibility,
+        prerequisites,
+        isTeamEvent,
+        teamMinSize: isTeamEvent ? Number(teamMinSize) : 1,
+        teamMaxSize: isTeamEvent ? Number(teamMaxSize) : 1,
+        tags: tags.split(',').map((t) => t.trim()),
+      });
+
+      if (res.data.success) {
+        navigate('/organizer/dashboard');
+      }
+    } catch (err: any) {
+      setErrorMessage(
+        err.response?.data?.message || 'Failed to create event. Please verify all fields.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+          Create New Event Proposal
+        </h1>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Propose a technical event, hackathon, workshop, or cultural activity for college administration review.
+        </p>
+      </div>
+
+      {errorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-500 mt-0.5" />
+          <p className="flex-1">{errorMessage}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <h2 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+            Basic Event Details
+          </h2>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Event Title *
+            </label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. HackCampus 2026: 36-Hour National Hackathon"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Category *
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white cursor-pointer"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Tags (Comma-separated for AI Recommendations)
+              </label>
+              <input
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Artificial Intelligence, Python, Hackathon"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Detailed Description *
+            </label>
+            <textarea
+              required
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe event highlights, guest speakers, learning objectives, schedules, prizes, etc."
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+
+          {/* Banner Preset Picker */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Banner Preset or Custom Image URL
+            </label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRESET_BANNERS.map((preset) => (
+                <button
+                  type="button"
+                  key={preset.name}
+                  onClick={() => setBannerImage(preset.url)}
+                  className={`rounded-xl border p-1 transition cursor-pointer ${
+                    bannerImage === preset.url
+                      ? 'border-indigo-600 ring-2 ring-indigo-500/20'
+                      : 'border-slate-200 hover:border-slate-300 dark:border-slate-700'
+                  }`}
+                >
+                  <img
+                    src={preset.url}
+                    alt={preset.name}
+                    className="h-12 w-20 rounded-lg object-cover"
+                  />
+                  <span className="block mt-1 text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate max-w-20">
+                    {preset.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="url"
+              value={bannerImage}
+              onChange={(e) => setBannerImage(e.target.value)}
+              placeholder="Or paste custom image URL..."
+              className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+        </div>
+
+        {/* Schedule & Venue */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <h2 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+            Schedule & Location
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Event Date *
+              </label>
+              <input
+                type="date"
+                required
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Start Time *
+              </label>
+              <input
+                type="text"
+                required
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                placeholder="10:00 AM"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                End Time *
+              </label>
+              <input
+                type="text"
+                required
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                placeholder="04:00 PM"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Format
+              </label>
+              <select
+                value={venueType}
+                onChange={(e) => setVenueType(e.target.value as any)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white cursor-pointer"
+              >
+                <option value="offline">In-Person (On Campus)</option>
+                <option value="online">Online / Virtual (Zoom/Meet)</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Campus Venue / Room *
+              </label>
+              <input
+                type="text"
+                required
+                value={venue}
+                onChange={(e) => setVenue(e.target.value)}
+                placeholder="Main Auditorium, Science Block Room 304"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {venueType !== 'offline' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Online Meeting Link
+              </label>
+              <input
+                type="url"
+                value={meetingUrl}
+                onChange={(e) => setMeetingUrl(e.target.value)}
+                placeholder="https://meet.google.com/xyz-abc"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Capacity, Deadlines, & Pricing */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <h2 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+            Capacity, Deadlines & Ticketing
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Maximum Attendee Capacity *
+              </label>
+              <input
+                type="number"
+                required
+                min={1}
+                value={maxCapacity}
+                onChange={(e) => setMaxCapacity(e.target.value)}
+                placeholder="100"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Registration Deadline *
+              </label>
+              <input
+                type="date"
+                required
+                value={registrationDeadline}
+                onChange={(e) => setRegistrationDeadline(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPaid}
+                  onChange={(e) => setIsPaid(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>This is a Paid Event (Requires fee)</span>
+              </label>
+            </div>
+
+            {isPaid && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Ticket Fee ($ USD)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={ticketPrice}
+                  onChange={(e) => setTicketPrice(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Team Registrations */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Team Competition Settings
+              </h2>
+              <p className="text-xs text-slate-400">
+                Enable for hackathons, robowars, and multi-member team competitions
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isTeamEvent}
+                onChange={(e) => setIsTeamEvent(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+
+          {isTeamEvent && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Minimum Team Members
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={teamMinSize}
+                  onChange={(e) => setTeamMinSize(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Maximum Team Members
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={teamMaxSize}
+                  onChange={(e) => setTeamMaxSize(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Submit */}
+        <div className="flex items-center justify-end gap-3 pt-4">
+          <Button variant="outline" type="button" onClick={() => navigate('/organizer/dashboard')}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            size="lg"
+            isLoading={isLoading}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            Submit for Administrative Approval
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+};
