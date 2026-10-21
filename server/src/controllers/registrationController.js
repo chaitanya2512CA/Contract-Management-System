@@ -1,301 +1,234 @@
-import { Registration } from '../models/Registration.js';
-import { Event } from '../models/Event.js';
-import { Team } from '../models/Team.js';
-import { Notification } from '../models/Notification.js';
+import crypto from 'crypto';
+import { query, getClient, mapRegistration } from '../config/db.js';
 import { generateTicketCode, generateQRCodeDataUrl } from '../utils/qrHelper.js';
-import { findScheduleConflict } from '../utils/conflictDetector.js';
-import { Parser } from 'json2csv';
 
 /**
- * Register for an Event (Individual)
+ * Register Student for Event (Single Participant)
+ * Protected with SQL row-level lock (FOR UPDATE) to prevent overbooking & race conditions
  */
 export const registerForEvent = async (req, res) => {
+  const client = await getClient();
   try {
-    const student = req.user;
-    const { eventId } = req.params;
-    const { bypassConflict } = req.body;
+    const eventId = req.params.eventId || req.body.eventId;
+    const userId = req.user.id || req.user._id;
 
-    const event = await Event.findById(eventId);
-    if (!event) {
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: 'Event ID is required.' });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Lock and inspect event row
+    const eventRes = await client.query('SELECT * FROM events WHERE id = $1 FOR UPDATE', [eventId]);
+    if (eventRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Event not found.' });
     }
 
+    const event = eventRes.rows[0];
+
+    // Status check
     if (event.status !== 'approved') {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: 'This event is not currently accepting registrations.',
+        message: 'Registration is not open. This event is not yet approved or has been cancelled.',
       });
     }
 
-    // Check registration deadline
-    const now = new Date();
-    if (new Date(event.registrationDeadline) < now) {
+    // Deadline check
+    if (event.registration_deadline && new Date() > new Date(event.registration_deadline)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: 'Registration deadline for this event has passed.',
+        message: 'Registration closed. The registration deadline for this event has passed.',
       });
     }
 
-    // Check if already registered
-    const existingRegistration = await Registration.findOne({
-      event: event._id,
-      user: student._id,
-    });
-
-    if (existingRegistration && existingRegistration.status !== 'cancelled') {
+    // Capacity check
+    const currentCount = parseInt(event.registered_count, 10) || 0;
+    const maxCapacity = parseInt(event.max_capacity, 10) || 100;
+    if (currentCount >= maxCapacity) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: `You are already ${existingRegistration.status} for this event. Ticket Code: ${existingRegistration.ticketCode}`,
-        registration: existingRegistration,
+        message: 'This event has reached its maximum seat capacity.',
       });
     }
 
-    // Check for schedule conflict with other registered events
-    if (!bypassConflict) {
-      const activeRegistrations = await Registration.find({
-        user: student._id,
-        status: 'registered',
-      }).populate('event');
+    // 2. Duplicate registration check
+    const dupRes = await client.query(
+      'SELECT id, status FROM event_registrations WHERE user_id = $1 AND event_id = $2',
+      [userId, eventId]
+    );
 
-      const existingEvents = activeRegistrations.map((r) => r.event).filter(Boolean);
-      const conflictCheck = findScheduleConflict(event, existingEvents);
-
-      if (conflictCheck.hasConflict) {
-        return res.status(409).json({
+    if (dupRes.rows.length > 0) {
+      const existing = dupRes.rows[0];
+      if (existing.status !== 'cancelled') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
           success: false,
-          hasConflict: true,
-          conflictingEvent: conflictCheck.conflictingEvent,
-          message: `Schedule conflict detected! This event overlaps with your registration for "${conflictCheck.conflictingEvent.title}". Do you wish to proceed anyway?`,
+          message: 'You are already registered for this event.',
         });
       }
     }
 
-    // Check capacity: if full, place on waitlist
-    const isFull = event.registeredCount >= event.maxCapacity;
-    const registrationStatus = isFull ? 'waitlisted' : 'registered';
-
+    // 3. Generate Digital Ticket & QR Code Data
     const ticketCode = generateTicketCode();
-    const qrPayload = {
-      ticketCode,
-      eventId: event._id,
-      userId: student._id,
-      studentName: student.name,
-      studentEmail: student.email,
-      eventTitle: event.title,
-      eventDate: event.eventDate,
-      issuedAt: new Date().toISOString(),
-    };
+    const qrCodeData = await generateQRCodeDataUrl(ticketCode);
+    const registrationId = crypto.randomUUID();
 
-    const qrCodeData = await generateQRCodeDataUrl(qrPayload);
-
-    let registration;
-    if (existingRegistration && existingRegistration.status === 'cancelled') {
-      // Re-activate registration
-      existingRegistration.status = registrationStatus;
-      existingRegistration.ticketCode = ticketCode;
-      existingRegistration.qrCodeData = qrCodeData;
-      existingRegistration.registeredAt = new Date();
-      registration = await existingRegistration.save();
+    // 4. Insert or reactivate registration
+    let regRow;
+    if (dupRes.rows.length > 0) {
+      const updateRes = await client.query(
+        `UPDATE event_registrations
+         SET ticket_code = $1, qr_code_data = $2, status = 'confirmed', registration_date = NOW(), updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [ticketCode, qrCodeData, dupRes.rows[0].id]
+      );
+      regRow = updateRes.rows[0];
     } else {
-      registration = await Registration.create({
-        event: event._id,
-        user: student._id,
-        ticketCode,
-        registrationType: 'individual',
-        status: registrationStatus,
-        qrCodeData,
-        registeredAt: new Date(),
-      });
+      const insertRes = await client.query(
+        `INSERT INTO event_registrations (id, event_id, user_id, ticket_code, status, qr_code_data)
+         VALUES ($1, $2, $3, $4, 'confirmed', $5)
+         RETURNING *`,
+        [registrationId, eventId, userId, ticketCode, qrCodeData]
+      );
+      regRow = insertRes.rows[0];
     }
 
-    // Update event counter
-    if (registrationStatus === 'registered') {
-      event.registeredCount += 1;
-    } else {
-      event.waitlistCount = (event.waitlistCount || 0) + 1;
-    }
-    await event.save();
+    // 5. Increment registered_count on event
+    await client.query('UPDATE events SET registered_count = registered_count + 1 WHERE id = $1', [eventId]);
 
-    // Create confirmation notification
-    await Notification.create({
-      recipient: student._id,
-      title: registrationStatus === 'registered' ? 'Registration Confirmed!' : 'Added to Waitlist',
-      message:
-        registrationStatus === 'registered'
-          ? `You have successfully secured a seat for ${event.title}. Your Ticket Code is ${ticketCode}.`
-          : `You are on the waitlist for ${event.title}. You will be notified automatically if a seat becomes available.`,
-      type: 'registration',
-      link: '/my-events',
-    });
+    await client.query('COMMIT');
 
+    const registration = mapRegistration(regRow);
     res.status(201).json({
       success: true,
-      message:
-        registrationStatus === 'registered'
-          ? 'Event registration successful!'
-          : 'Event is at maximum capacity. You have been placed on the priority waitlist.',
+      message: 'Registration confirmed! Your digital entry pass is now available in your dashboard.',
       registration,
+      ticketCode,
     });
   } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.code === '23505') {
+      return res.status(400).json({ success: false, message: 'Duplicate registration detected.' });
+    }
     console.error('Error in registerForEvent:', error);
-    res.status(500).json({ success: false, message: 'Failed to process event registration.' });
+    res.status(500).json({ success: false, message: 'Failed to complete event registration.' });
+  } finally {
+    client.release();
   }
 };
 
 /**
- * Register as a Team for Hackathons or Group Competitions
+ * Register Team for Event
  */
 export const registerTeam = async (req, res) => {
+  const client = await getClient();
   try {
-    const student = req.user;
-    const { eventId } = req.params;
+    const eventId = req.params.eventId || req.body.eventId;
     const { teamName } = req.body;
+    const userId = req.user.id || req.user._id;
 
-    if (!teamName || teamName.trim().length === 0) {
-      return res.status(400).json({ success: false, message: 'Please provide a team name.' });
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: 'Event ID is required.' });
     }
 
-    const event = await Event.findById(eventId);
-    if (!event) {
+    if (!teamName || !teamName.trim()) {
+      return res.status(400).json({ success: false, message: 'Team name is required.' });
+    }
+
+    await client.query('BEGIN');
+
+    const eventRes = await client.query('SELECT * FROM events WHERE id = $1 FOR UPDATE', [eventId]);
+    if (eventRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Event not found.' });
     }
 
-    if (!event.isTeamEvent) {
-      return res.status(400).json({ success: false, message: 'This event does not accept team registrations.' });
+    const event = eventRes.rows[0];
+    const currentCount = parseInt(event.registered_count, 10) || 0;
+    const maxCapacity = parseInt(event.max_capacity, 10) || 100;
+    if (currentCount >= maxCapacity) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'This event has reached full capacity.' });
     }
 
-    // Check existing registration
-    const existingRegistration = await Registration.findOne({
-      event: event._id,
-      user: student._id,
-      status: { $ne: 'cancelled' },
-    });
-    if (existingRegistration) {
-      return res.status(400).json({ success: false, message: 'You are already registered for this event.' });
+    const dupRes = await client.query(
+      'SELECT id FROM event_registrations WHERE user_id = $1 AND event_id = $2 AND status != \'cancelled\'',
+      [userId, eventId]
+    );
+
+    if (dupRes.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'You have already registered for this event.' });
     }
 
-    // Generate join code for team members e.g. "TEAM-8942"
-    const joinCode = `TEAM-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const team = await Team.create({
-      teamName: teamName.trim(),
-      event: event._id,
-      leader: student._id,
-      members: [student._id],
-      joinCode,
-    });
-
-    const isFull = event.registeredCount >= event.maxCapacity;
-    const status = isFull ? 'waitlisted' : 'registered';
     const ticketCode = generateTicketCode();
+    const qrCodeData = await generateQRCodeDataUrl(ticketCode);
+    const regId = crypto.randomUUID();
 
-    const qrPayload = {
-      ticketCode,
-      eventId: event._id,
-      userId: student._id,
-      studentName: student.name,
-      teamName: team.teamName,
-      joinCode: team.joinCode,
-    };
-    const qrCodeData = await generateQRCodeDataUrl(qrPayload);
+    const insertRes = await client.query(
+      `INSERT INTO event_registrations (id, event_id, user_id, ticket_code, status, qr_code_data, team_name)
+       VALUES ($1, $2, $3, $4, 'confirmed', $5, $6)
+       RETURNING *`,
+      [regId, eventId, userId, ticketCode, qrCodeData, teamName.trim()]
+    );
 
-    const registration = await Registration.create({
-      event: event._id,
-      user: student._id,
-      ticketCode,
-      registrationType: 'team',
-      team: team._id,
-      teamName: team.teamName,
-      status,
-      qrCodeData,
-    });
+    await client.query('UPDATE events SET registered_count = registered_count + 1 WHERE id = $1', [eventId]);
+    await client.query('COMMIT');
 
-    if (status === 'registered') {
-      event.registeredCount += 1;
-    } else {
-      event.waitlistCount = (event.waitlistCount || 0) + 1;
-    }
-    await event.save();
-
+    const registration = mapRegistration(insertRes.rows[0]);
     res.status(201).json({
       success: true,
-      message: `Team "${team.teamName}" created! Share invite code "${joinCode}" with teammates.`,
-      team,
+      message: `Team "${teamName}" registered successfully! Entry passes generated.`,
       registration,
+      ticketCode,
     });
   } catch (error) {
-    console.error('Error in registerTeam:', error);
-    res.status(500).json({ success: false, message: 'Failed to create team registration.' });
+    await client.query('ROLLBACK');
+    res.status(500).json({ success: false, message: 'Failed to complete team registration.' });
+  } finally {
+    client.release();
   }
 };
 
 /**
- * Join Existing Team
+ * Get Authenticated Student's Registrations & Ticket Passes
  */
-export const joinTeam = async (req, res) => {
+export const getMyRegistrations = async (req, res) => {
   try {
-    const student = req.user;
-    const { eventId } = req.params;
-    const { joinCode } = req.body;
+    const userId = req.user.id || req.user._id;
 
-    if (!joinCode) {
-      return res.status(400).json({ success: false, message: 'Team join code is required.' });
-    }
+    const regRes = await query(
+      `SELECT r.*,
+              e.title as event_title,
+              e.category as event_category,
+              e.event_date,
+              e.start_time as event_start_time,
+              e.end_time as event_end_time,
+              e.venue as event_venue,
+              e.banner_image as event_banner,
+              e.status as event_status
+       FROM event_registrations r
+       JOIN events e ON r.event_id = e.id
+       WHERE r.user_id = $1
+       ORDER BY r.registration_date DESC`,
+      [userId]
+    );
 
-    const event = await Event.findById(eventId);
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
-
-    const team = await Team.findOne({ event: event._id, joinCode: joinCode.trim().toUpperCase() });
-    if (!team) {
-      return res.status(404).json({ success: false, message: 'Invalid team join code.' });
-    }
-
-    if (team.members.length >= (event.teamMaxSize || 4)) {
-      return res.status(400).json({ success: false, message: 'This team has already reached maximum capacity.' });
-    }
-
-    if (team.members.some((m) => String(m) === String(student._id))) {
-      return res.status(400).json({ success: false, message: 'You are already a member of this team.' });
-    }
-
-    team.members.push(student._id);
-    if (team.members.length >= (event.teamMaxSize || 4)) {
-      team.status = 'complete';
-    }
-    await team.save();
-
-    const ticketCode = generateTicketCode();
-    const qrPayload = {
-      ticketCode,
-      eventId: event._id,
-      userId: student._id,
-      studentName: student.name,
-      teamName: team.teamName,
-    };
-    const qrCodeData = await generateQRCodeDataUrl(qrPayload);
-
-    const registration = await Registration.create({
-      event: event._id,
-      user: student._id,
-      ticketCode,
-      registrationType: 'team',
-      team: team._id,
-      teamName: team.teamName,
-      status: 'registered',
-      qrCodeData,
-    });
-
-    event.registeredCount += 1;
-    await event.save();
-
+    const registrations = regRes.rows.map(mapRegistration);
     res.status(200).json({
       success: true,
-      message: `Successfully joined team ${team.teamName}!`,
-      team,
-      registration,
+      count: registrations.length,
+      registrations,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to join team.' });
+    console.error('Error in getMyRegistrations:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve registrations.' });
   }
 };
 
@@ -303,191 +236,214 @@ export const joinTeam = async (req, res) => {
  * Cancel Registration
  */
 export const cancelRegistration = async (req, res) => {
+  const client = await getClient();
   try {
-    const student = req.user;
-    const { registrationId } = req.params;
+    const { id } = req.params;
+    const userId = req.user.id || req.user._id;
+    const isSuperAdmin = req.user.role === 'admin';
 
-    const registration = await Registration.findOne({
-      _id: registrationId,
-      user: student._id,
-    });
+    await client.query('BEGIN');
 
-    if (!registration) {
+    const regRes = await client.query('SELECT * FROM event_registrations WHERE id = $1 FOR UPDATE', [id]);
+    if (regRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Registration record not found.' });
     }
 
-    if (registration.status === 'cancelled') {
+    const reg = regRes.rows[0];
+    if (!isSuperAdmin && reg.user_id !== userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'Access denied: You cannot cancel another student registration.' });
+    }
+
+    if (reg.status === 'cancelled') {
+      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'Registration is already cancelled.' });
     }
 
-    const previousStatus = registration.status;
-    registration.status = 'cancelled';
-    await registration.save();
+    await client.query('UPDATE event_registrations SET status = \'cancelled\', updated_at = NOW() WHERE id = $1', [id]);
+    await client.query('UPDATE events SET registered_count = GREATEST(0, registered_count - 1) WHERE id = $1', [reg.event_id]);
 
-    const event = await Event.findById(registration.event);
-    if (event) {
-      if (previousStatus === 'registered') {
-        event.registeredCount = Math.max(0, event.registeredCount - 1);
-
-        // Check if there is someone on the waitlist to promote!
-        const nextInWaitlist = await Registration.findOne({
-          event: event._id,
-          status: 'waitlisted',
-        }).sort({ createdAt: 1 });
-
-        if (nextInWaitlist) {
-          nextInWaitlist.status = 'registered';
-          await nextInWaitlist.save();
-
-          event.registeredCount += 1;
-          event.waitlistCount = Math.max(0, (event.waitlistCount || 0) - 1);
-
-          // Notify promoted student
-          await Notification.create({
-            recipient: nextInWaitlist.user,
-            title: `Great news! Seat Confirmed for ${event.title}`,
-            message: `A seat opened up and you have been promoted from the waitlist to confirmed registered! Ticket Code: ${nextInWaitlist.ticketCode}`,
-            type: 'registration',
-            link: '/my-events',
-          });
-        }
-      } else if (previousStatus === 'waitlisted') {
-        event.waitlistCount = Math.max(0, (event.waitlistCount || 0) - 1);
-      }
-      await event.save();
-    }
+    await client.query('COMMIT');
 
     res.status(200).json({
       success: true,
-      message: 'Registration cancelled successfully.',
-      registration,
+      message: 'Registration cancelled. The seat has been returned to the available pool.',
     });
   } catch (error) {
-    console.error('Error in cancelRegistration:', error);
+    await client.query('ROLLBACK');
     res.status(500).json({ success: false, message: 'Failed to cancel registration.' });
+  } finally {
+    client.release();
   }
 };
 
 /**
- * Get Authenticated Student's Registrations
+ * Get Attendees for Organizer Roster
  */
-export const getMyRegistrations = async (req, res) => {
+export const getEventAttendees = async (req, res) => {
   try {
-    const student = req.user;
-    const { status } = req.query;
+    const { eventId } = req.params;
 
-    const filter = { user: student._id };
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
+    const attendeesRes = await query(
+      `SELECT r.id, r.ticket_code, r.status, r.registration_date, r.qr_code_data, r.team_name,
+              u.id as user_id, u.name as user_name, u.email as user_email, u.student_id as user_student_id,
+              u.department as user_department, u.phone as user_phone
+       FROM event_registrations r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.event_id = $1 AND r.status != 'cancelled'
+       ORDER BY r.registration_date ASC`,
+      [eventId]
+    );
 
-    const registrations = await Registration.find(filter)
-      .populate({
-        path: 'event',
-        populate: { path: 'organizer', select: 'name organizationName email' },
-      })
-      .populate('team')
-      .populate('certificate')
-      .sort({ createdAt: -1 });
-
+    const attendees = attendeesRes.rows.map(mapRegistration);
     res.status(200).json({
       success: true,
-      count: registrations.length,
-      registrations,
+      count: attendees.length,
+      attendees,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch registrations.' });
+    res.status(500).json({ success: false, message: 'Failed to retrieve attendee roster.' });
   }
 };
 
 /**
- * Get Event Participants Roster (Organizer / Admin)
+ * Schedule Conflict Detector
+ */
+export const checkScheduleConflict = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Get the target event details
+    const targetEventRes = await query('SELECT event_date, start_time, end_time FROM events WHERE id = $1', [eventId]);
+    if (targetEventRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+    const target = targetEventRes.rows[0];
+
+    // Find other registrations for same date
+    const conflictRes = await query(
+      `SELECT e.id, e.title, e.start_time, e.end_time
+       FROM event_registrations r
+       JOIN events e ON r.event_id = e.id
+       WHERE r.user_id = $1 AND r.status = 'confirmed' AND e.event_date = $2 AND e.id != $3`,
+      [userId, target.event_date, eventId]
+    );
+
+    const hasConflict = conflictRes.rows.length > 0;
+    res.status(200).json({
+      success: true,
+      hasConflict,
+      conflicts: conflictRes.rows,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error checking schedule conflicts.' });
+  }
+};
+
+/**
+ * Join Existing Team for Team Events
+ */
+export const joinTeam = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { joinCode } = req.body;
+    const student = req.user;
+
+    if (!joinCode) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid team join code.' });
+    }
+
+    const teamRegRes = await query(
+      `SELECT team_id, team_name, event_id FROM event_registrations 
+       WHERE (team_id = $1 OR team_name ILIKE $1 OR ticket_code = $1) AND event_id = $2
+       LIMIT 1`,
+      [joinCode.trim(), eventId]
+    );
+
+    if (teamRegRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No matching team found for this event.' });
+    }
+
+    const team = teamRegRes.rows[0];
+
+    // Delegate to registerForEvent logic with team params
+    req.body.teamId = team.team_id;
+    req.body.teamName = team.team_name;
+    return registerForEvent(req, res);
+  } catch (error) {
+    console.error('Error joining team:', error);
+    res.status(500).json({ success: false, message: 'Failed to join team.' });
+  }
+};
+
+/**
+ * Get Event Participants (Alias to getEventAttendees with extra fields)
  */
 export const getEventParticipants = async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { search, status } = req.query;
 
-    const event = await Event.findById(eventId);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found.' });
-    }
+    const attendeesRes = await query(
+      `SELECT r.id, r.event_id, r.ticket_code, r.status, r.registration_date, r.qr_code_data, r.team_name,
+              u.id as user_id, u.name as user_name, u.email as user_email, u.student_id as user_student_id,
+              u.department as user_department, u.phone as user_phone
+       FROM event_registrations r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.event_id = $1 AND r.status != 'cancelled'
+       ORDER BY r.registration_date ASC`,
+      [eventId]
+    );
 
-    // Auth check: Organizer of this event or Admin
-    if (req.user.role !== 'admin' && String(event.organizer) !== String(req.user._id)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized.' });
-    }
-
-    const filter = { event: event._id };
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    let registrations = await Registration.find(filter)
-      .populate('user', 'name email studentId department phone avatar')
-      .populate('team', 'teamName joinCode')
-      .sort({ createdAt: -1 });
-
-    if (search) {
-      const s = search.toLowerCase();
-      registrations = registrations.filter(
-        (r) =>
-          r.user?.name?.toLowerCase().includes(s) ||
-          r.user?.email?.toLowerCase().includes(s) ||
-          r.user?.studentId?.toLowerCase().includes(s) ||
-          r.ticketCode?.toLowerCase().includes(s)
-      );
-    }
-
+    const participants = attendeesRes.rows.map(mapRegistration);
     res.status(200).json({
       success: true,
-      count: registrations.length,
-      registrations,
+      count: participants.length,
+      participants,
+      attendees: participants,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch participant roster.' });
+    console.error('Error in getEventParticipants:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve participants.' });
   }
 };
 
 /**
- * Export Participants to CSV
+ * Export Event Participants to CSV
  */
 export const exportParticipantsCSV = async (req, res) => {
   try {
     const { eventId } = req.params;
-    const event = await Event.findById(eventId);
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
 
-    if (req.user.role !== 'admin' && String(event.organizer) !== String(req.user._id)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized.' });
+    const eventRes = await query('SELECT title FROM events WHERE id = $1', [eventId]);
+    const eventTitle = eventRes.rows[0]?.title || 'event';
+
+    const participantsRes = await query(
+      `SELECT u.name, u.email, u.student_id, u.department, u.phone,
+              r.ticket_code, r.status, r.team_name, r.registration_date
+       FROM event_registrations r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.event_id = $1 AND r.status != 'cancelled'
+       ORDER BY r.registration_date ASC`,
+      [eventId]
+    );
+
+    let csv = 'Student Name,Email,Student ID,Department,Phone,Ticket Code,Status,Team Name,Registration Date\n';
+    for (const p of participantsRes.rows) {
+      const regDate = p.registration_date ? new Date(p.registration_date).toISOString() : '';
+      csv += `"${(p.name || '').replace(/"/g, '""')}","${p.email}","${p.student_id || ''}","${p.department || ''}","${p.phone || ''}","${p.ticket_code}","${p.status}","${p.team_name || ''}","${regDate}"\n`;
     }
 
-    const registrations = await Registration.find({ event: event._id })
-      .populate('user', 'name email studentId department phone')
-      .populate('team', 'teamName');
-
-    const fields = [
-      { label: 'Ticket Code', value: 'ticketCode' },
-      { label: 'Student Name', value: 'user.name' },
-      { label: 'Student Email', value: 'user.email' },
-      { label: 'Student ID', value: 'user.studentId' },
-      { label: 'Department', value: 'user.department' },
-      { label: 'Phone', value: 'user.phone' },
-      { label: 'Status', value: 'status' },
-      { label: 'Type', value: 'registrationType' },
-      { label: 'Team Name', value: 'teamName' },
-      { label: 'Registered Date', value: (row) => new Date(row.registeredAt).toLocaleString() },
-      { label: 'Attended Date', value: (row) => (row.attendedAt ? new Date(row.attendedAt).toLocaleString() : 'N/A') },
-    ];
-
-    const json2csvParser = new Parser({ fields });
-    const csv = json2csvParser.parse(registrations);
-
-    res.header('Content-Type', 'text/csv');
-    res.attachment(`${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_Participants.csv`);
-    return res.send(csv);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="participants-${eventId}.csv"`
+    );
+    return res.status(200).send(csv);
   } catch (error) {
-    console.error('Error exporting CSV:', error);
+    console.error('Error exporting participants CSV:', error);
     res.status(500).json({ success: false, message: 'Failed to export CSV.' });
   }
 };
+

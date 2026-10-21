@@ -1,9 +1,6 @@
-import { User } from '../models/User.js';
-import { Event } from '../models/Event.js';
-import { Registration } from '../models/Registration.js';
-import { Attendance } from '../models/Attendance.js';
-import { AuditLog } from '../models/AuditLog.js';
-import { Notification } from '../models/Notification.js';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { query, mapUser, mapEvent, mapAuditLog } from '../config/db.js';
 
 /**
  * Get Comprehensive Admin Dashboard Statistics & Analytics
@@ -11,56 +8,81 @@ import { Notification } from '../models/Notification.js';
 export const getAdminStats = async (req, res) => {
   try {
     const [
-      totalStudents,
-      totalOrganizers,
-      totalAdmins,
-      totalEvents,
-      pendingEvents,
-      approvedEvents,
-      cancelledEvents,
-      totalRegistrations,
-      totalAttended,
+      studentsRes,
+      organizersRes,
+      adminsRes,
+      totalEventsRes,
+      pendingEventsRes,
+      approvedEventsRes,
+      cancelledEventsRes,
+      registrationsRes,
+      attendedRes,
     ] = await Promise.all([
-      User.countDocuments({ role: 'student' }),
-      User.countDocuments({ role: 'organizer' }),
-      User.countDocuments({ role: 'admin' }),
-      Event.countDocuments(),
-      Event.countDocuments({ status: 'pending_approval' }),
-      Event.countDocuments({ status: 'approved' }),
-      Event.countDocuments({ status: 'cancelled' }),
-      Registration.countDocuments({ status: { $in: ['registered', 'attended'] } }),
-      Registration.countDocuments({ status: 'attended' }),
+      query("SELECT COUNT(*) FROM users WHERE role = 'student'"),
+      query("SELECT COUNT(*) FROM users WHERE role = 'organizer'"),
+      query("SELECT COUNT(*) FROM users WHERE role = 'admin'"),
+      query("SELECT COUNT(*) FROM events"),
+      query("SELECT COUNT(*) FROM events WHERE status = 'pending_approval'"),
+      query("SELECT COUNT(*) FROM events WHERE status = 'approved'"),
+      query("SELECT COUNT(*) FROM events WHERE status = 'cancelled'"),
+      query("SELECT COUNT(*) FROM event_registrations WHERE status IN ('confirmed', 'attended')"),
+      query("SELECT COUNT(*) FROM event_registrations WHERE status = 'attended'"),
     ]);
+
+    const totalStudents = parseInt(studentsRes.rows[0].count, 10) || 0;
+    const totalOrganizers = parseInt(organizersRes.rows[0].count, 10) || 0;
+    const totalAdmins = parseInt(adminsRes.rows[0].count, 10) || 0;
+    const totalEvents = parseInt(totalEventsRes.rows[0].count, 10) || 0;
+    const pendingEvents = parseInt(pendingEventsRes.rows[0].count, 10) || 0;
+    const approvedEvents = parseInt(approvedEventsRes.rows[0].count, 10) || 0;
+    const cancelledEvents = parseInt(cancelledEventsRes.rows[0].count, 10) || 0;
+    const totalRegistrations = parseInt(registrationsRes.rows[0].count, 10) || 0;
+    const totalAttended = parseInt(attendedRes.rows[0].count, 10) || 0;
 
     // Aggregate events by category
-    const categoryStats = await Event.aggregate([
-      { $match: { status: 'approved' } },
-      { $group: { _id: '$category', count: { $sum: 1 }, totalRegistrations: { $sum: '$registeredCount' } } },
-      { $project: { category: '$_id', count: 1, totalRegistrations: 1, _id: 0 } },
-      { $sort: { count: -1 } },
-    ]);
+    const categoryRes = await query(`
+      SELECT category, COUNT(*)::int as count, COALESCE(SUM(registered_count), 0)::int as "totalRegistrations"
+      FROM events
+      WHERE status = 'approved'
+      GROUP BY category
+      ORDER BY count DESC
+    `);
+    const categoryStats = categoryRes.rows;
 
-    // Aggregate monthly registrations for trends
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-    sixMonthsAgo.setDate(1);
+    // Monthly registrations for trends (last 6 months)
+    const monthlyRes = await query(`
+      SELECT created_at, status
+      FROM event_registrations
+      ORDER BY created_at ASC
+    `);
 
-    const monthlyRegistrations = await Registration.aggregate([
-      { $match: { createdAt: { $gte: sixMonthsAgo } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%b %Y', date: '$createdAt' } },
-          count: { $sum: 1 },
-          attended: {
-            $sum: { $cond: [{ $eq: ['$status', 'attended'] }, 1, 0] },
-          },
-        },
-      },
-      { $project: { month: '$_id', registrations: '$count', attended: 1, _id: 0 } },
-    ]);
+    const monthsMap = {};
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const key = `${months[d.getMonth()]} ${d.getFullYear()}`;
+      monthsMap[key] = { month: key, registrations: 0, attended: 0 };
+    }
+
+    for (const r of monthlyRes.rows) {
+      if (r.created_at) {
+        const d = new Date(r.created_at);
+        const key = `${months[d.getMonth()]} ${d.getFullYear()}`;
+        if (!monthsMap[key]) {
+          monthsMap[key] = { month: key, registrations: 0, attended: 0 };
+        }
+        monthsMap[key].registrations++;
+        if (r.status === 'attended') {
+          monthsMap[key].attended++;
+        }
+      }
+    }
+    const monthlyRegistrations = Object.values(monthsMap);
 
     // Recent activity audit logs
-    const recentLogs = await AuditLog.find().sort({ createdAt: -1 }).limit(8);
+    const logsRes = await query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 8');
+    const recentLogs = logsRes.rows.map(mapAuditLog);
 
     res.status(200).json({
       success: true,
@@ -98,9 +120,10 @@ export const getAdminStats = async (req, res) => {
  */
 export const getPendingEvents = async (req, res) => {
   try {
-    const events = await Event.find({ status: 'pending_approval' })
-      .populate('organizer', 'name email department organizationName phone')
-      .sort({ createdAt: -1 });
+    const result = await query(
+      "SELECT * FROM events WHERE status = 'pending_approval' ORDER BY created_at DESC"
+    );
+    const events = result.rows.map(mapEvent);
 
     res.status(200).json({
       success: true,
@@ -108,6 +131,7 @@ export const getPendingEvents = async (req, res) => {
       events,
     });
   } catch (error) {
+    console.error('Error fetching pending events:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch pending events.' });
   }
 };
@@ -120,43 +144,60 @@ export const approveEvent = async (req, res) => {
     const admin = req.user;
     const { eventId } = req.params;
 
-    const event = await Event.findById(eventId).populate('organizer');
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
+    const findRes = await query('SELECT * FROM events WHERE id = $1', [eventId]);
+    if (findRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+    const currentEvent = findRes.rows[0];
 
-    event.status = 'approved';
-    event.approvedBy = admin._id;
-    event.approvedAt = new Date();
-    event.rejectionReason = '';
-    await event.save();
+    const updateRes = await query(
+      `UPDATE events 
+       SET status = 'approved', rejection_reason = '', updated_at = NOW() 
+       WHERE id = $1 
+       RETURNING *`,
+      [eventId]
+    );
+    const updatedEvent = mapEvent(updateRes.rows[0]);
 
-    // Notify organizer
-    await Notification.create({
-      recipient: event.organizer._id,
-      title: 'Event Approved! 🚀',
-      message: `Your event "${event.title}" has been reviewed and officially approved by campus administration. It is now live for registrations.`,
-      type: 'event_approval',
-      link: `/events/${event._id}`,
-    });
+    // Send notification to creator
+    if (currentEvent.creator_id) {
+      await query(
+        `INSERT INTO notifications (id, recipient_id, title, message, type, link, is_read, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, false, NOW())`,
+        [
+          crypto.randomUUID(),
+          currentEvent.creator_id,
+          'Event Approved! 🚀',
+          `Your event "${currentEvent.title}" has been reviewed and officially approved by campus administration. It is now live for registrations.`,
+          'event_approval',
+          `/events/${currentEvent.id}`,
+        ]
+      ).catch(() => {});
+    }
 
     // Create Audit Log
-    await AuditLog.create({
-      admin: admin._id,
-      adminName: admin.name,
-      adminEmail: admin.email,
-      action: 'APPROVE_EVENT',
-      targetType: 'Event',
-      targetId: event._id.toString(),
-      targetName: event.title,
-      details: `Approved by ${admin.name} (${admin.adminId || admin.email})`,
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        crypto.randomUUID(),
+        admin.id || admin._id,
+        admin.email,
+        'APPROVE_EVENT',
+        'Event',
+        eventId,
+        `Approved by ${admin.name} (${admin.adminId || admin.email})`,
+        req.ip || '127.0.0.1',
+      ]
+    );
 
     res.status(200).json({
       success: true,
-      message: `Event "${event.title}" has been approved and published.`,
-      event,
+      message: `Event "${updatedEvent.title}" has been approved and published.`,
+      event: updatedEvent,
     });
   } catch (error) {
+    console.error('Error approving event:', error);
     res.status(500).json({ success: false, message: 'Error approving event.' });
   }
 };
@@ -170,41 +211,61 @@ export const rejectEvent = async (req, res) => {
     const { eventId } = req.params;
     const { reason } = req.body;
 
-    const event = await Event.findById(eventId).populate('organizer');
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
+    const findRes = await query('SELECT * FROM events WHERE id = $1', [eventId]);
+    if (findRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+    const currentEvent = findRes.rows[0];
+    const rejectionReason = reason || 'Does not meet campus event guidelines.';
 
-    event.status = 'rejected';
-    event.rejectionReason = reason || 'Does not meet campus event guidelines.';
-    await event.save();
+    const updateRes = await query(
+      `UPDATE events 
+       SET status = 'rejected', rejection_reason = $1, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [rejectionReason, eventId]
+    );
+    const updatedEvent = mapEvent(updateRes.rows[0]);
 
-    // Notify organizer
-    await Notification.create({
-      recipient: event.organizer._id,
-      title: 'Event Review Update',
-      message: `Your proposed event "${event.title}" was not approved. Feedback: ${event.rejectionReason}`,
-      type: 'event_approval',
-      link: '/organizer/dashboard',
-    });
+    // Send notification to creator
+    if (currentEvent.creator_id) {
+      await query(
+        `INSERT INTO notifications (id, recipient_id, title, message, type, link, is_read, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, false, NOW())`,
+        [
+          crypto.randomUUID(),
+          currentEvent.creator_id,
+          'Event Review Update',
+          `Your proposed event "${currentEvent.title}" was not approved. Feedback: ${rejectionReason}`,
+          'event_approval',
+          '/events',
+        ]
+      ).catch(() => {});
+    }
 
     // Create Audit Log
-    await AuditLog.create({
-      admin: admin._id,
-      adminName: admin.name,
-      adminEmail: admin.email,
-      action: 'REJECT_EVENT',
-      targetType: 'Event',
-      targetId: event._id.toString(),
-      targetName: event.title,
-      details: `Rejected. Reason: ${event.rejectionReason}`,
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        crypto.randomUUID(),
+        admin.id || admin._id,
+        admin.email,
+        'REJECT_EVENT',
+        'Event',
+        eventId,
+        `Rejected. Reason: ${rejectionReason}`,
+        req.ip || '127.0.0.1',
+      ]
+    );
 
     res.status(200).json({
       success: true,
       message: 'Event rejected with feedback delivered to organizer.',
-      event,
+      event: updatedEvent,
     });
   } catch (error) {
+    console.error('Error rejecting event:', error);
     res.status(500).json({ success: false, message: 'Error rejecting event.' });
   }
 };
@@ -215,30 +276,39 @@ export const rejectEvent = async (req, res) => {
 export const getAllUsers = async (req, res) => {
   try {
     const { role, search, page = 1, limit = 20 } = req.query;
-    const query = {};
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions = [];
+    const params = [];
 
     if (role && role !== 'all') {
-      query.role = role;
+      params.push(role);
+      conditions.push(`role = $${params.length}`);
     }
 
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { department: { $regex: search, $options: 'i' } },
-        { studentId: { $regex: search, $options: 'i' } },
-        { employeeId: { $regex: search, $options: 'i' } },
-      ];
+      params.push(`%${search}%`);
+      const pIdx = params.length;
+      conditions.push(`(name ILIKE $${pIdx} OR email ILIKE $${pIdx} OR department ILIKE $${pIdx} OR student_id ILIKE $${pIdx} OR employee_id ILIKE $${pIdx})`);
     }
 
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 20;
-    const skip = (pageNum - 1) * limitNum;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const [users, total] = await Promise.all([
-      User.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      User.countDocuments(query),
-    ]);
+    const countRes = await query(`SELECT COUNT(*) FROM users ${whereClause}`, params);
+    const total = parseInt(countRes.rows[0].count, 10) || 0;
+
+    params.push(limitNum);
+    const limitParamIdx = params.length;
+    params.push(offset);
+    const offsetParamIdx = params.length;
+
+    const dataRes = await query(
+      `SELECT * FROM users ${whereClause} ORDER BY created_at DESC LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
+      params
+    );
+    const users = dataRes.rows.map(mapUser);
 
     res.status(200).json({
       success: true,
@@ -248,6 +318,7 @@ export const getAllUsers = async (req, res) => {
       currentPage: pageNum,
     });
   } catch (error) {
+    console.error('Error in getAllUsers:', error);
     res.status(500).json({ success: false, message: 'Failed to retrieve users.' });
   }
 };
@@ -260,34 +331,45 @@ export const toggleUserStatus = async (req, res) => {
     const admin = req.user;
     const { userId } = req.params;
 
-    if (String(admin._id) === String(userId)) {
+    if (String(admin.id || admin._id) === String(userId)) {
       return res.status(400).json({ success: false, message: 'You cannot deactivate your own administrative account.' });
     }
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    const user = userRes.rows[0];
+    const newStatus = !user.is_active;
 
-    user.isActive = !user.isActive;
-    await user.save();
+    const updateRes = await query(
+      'UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [newStatus, userId]
+    );
+    const updatedUser = mapUser(updateRes.rows[0]);
 
-    await AuditLog.create({
-      admin: admin._id,
-      adminName: admin.name,
-      adminEmail: admin.email,
-      action: user.isActive ? 'REACTIVATE_USER' : 'DEACTIVATE_USER',
-      targetType: 'User',
-      targetId: user._id.toString(),
-      targetName: `${user.name} (${user.email})`,
-      details: `Account status updated to: ${user.isActive ? 'Active' : 'Deactivated'}`,
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        crypto.randomUUID(),
+        admin.id || admin._id,
+        admin.email,
+        newStatus ? 'REACTIVATE_USER' : 'DEACTIVATE_USER',
+        'User',
+        userId,
+        `Account status updated to: ${newStatus ? 'Active' : 'Deactivated'}`,
+        req.ip || '127.0.0.1',
+      ]
+    );
 
     res.status(200).json({
       success: true,
-      message: `User account has been ${user.isActive ? 'reactivated' : 'deactivated'}.`,
-      user,
+      message: `User account has been ${newStatus ? 'reactivated' : 'deactivated'}.`,
+      user: updatedUser,
     });
   } catch (error) {
+    console.error('Error in toggleUserStatus:', error);
     res.status(500).json({ success: false, message: 'Failed to update user status.' });
   }
 };
@@ -305,35 +387,44 @@ export const updateUserRole = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid role specified.' });
     }
 
-    if (String(admin._id) === String(userId) && role !== 'admin') {
+    if (String(admin.id || admin._id) === String(userId) && role !== 'admin') {
       return res.status(400).json({ success: false, message: 'You cannot demote your own administrative role.' });
     }
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    const previousRole = userRes.rows[0].role;
 
-    const previousRole = user.role;
-    user.role = role;
-    await user.save();
+    const updateRes = await query(
+      'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [role, userId]
+    );
+    const updatedUser = mapUser(updateRes.rows[0]);
 
-    await AuditLog.create({
-      admin: admin._id,
-      adminName: admin.name,
-      adminEmail: admin.email,
-      action: 'UPDATE_USER_ROLE',
-      targetType: 'User',
-      targetId: user._id.toString(),
-      targetName: `${user.name} (${user.email})`,
-      details: `Role changed from ${previousRole} to ${role}`,
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        crypto.randomUUID(),
+        admin.id || admin._id,
+        admin.email,
+        'UPDATE_USER_ROLE',
+        'User',
+        userId,
+        `Role changed from ${previousRole} to ${role}`,
+        req.ip || '127.0.0.1',
+      ]
+    );
 
     res.status(200).json({
       success: true,
       message: `User role updated to ${role}.`,
-      user,
+      user: updatedUser,
     });
   } catch (error) {
+    console.error('Error in updateUserRole:', error);
     res.status(500).json({ success: false, message: 'Failed to update user role.' });
   }
 };
@@ -350,38 +441,53 @@ export const createAdminAccount = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
     }
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
+    const existingRes = await query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email.trim()]);
+    if (existingRes.rows.length > 0) {
       return res.status(400).json({ success: false, message: 'An account with this email already exists.' });
     }
 
-    const newAdmin = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      role: 'admin',
-      adminId: adminId || `ADM-2026-${Math.floor(100 + Math.random() * 900)}`,
-      department: department || 'Campus Administration',
-      phone: phone || '',
-    });
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const newId = crypto.randomUUID();
+    const assignedAdminId = adminId || `ADM-2026-${Math.floor(100 + Math.random() * 900)}`;
 
-    await AuditLog.create({
-      admin: currentAdmin._id,
-      adminName: currentAdmin.name,
-      adminEmail: currentAdmin.email,
-      action: 'CREATE_ADMIN',
-      targetType: 'User',
-      targetId: newAdmin._id.toString(),
-      targetName: `${newAdmin.name} (${newAdmin.email})`,
-      details: `Provisioned by ${currentAdmin.name}`,
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    const insertRes = await query(
+      `INSERT INTO users (id, name, email, password_hash, role, admin_id, department, phone, is_active, created_at, updated_at)
+       VALUES ($1, $2, LOWER($3), $4, 'admin', $5, $6, $7, true, NOW(), NOW())
+       RETURNING *`,
+      [
+        newId,
+        name.trim(),
+        email.trim(),
+        passwordHash,
+        assignedAdminId,
+        department || 'Campus Administration',
+        phone || '',
+      ]
+    );
+    const newAdmin = mapUser(insertRes.rows[0]);
+
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        crypto.randomUUID(),
+        currentAdmin.id || currentAdmin._id,
+        currentAdmin.email,
+        'CREATE_ADMIN',
+        'User',
+        newAdmin.id,
+        `Provisioned by ${currentAdmin.name}`,
+        req.ip || '127.0.0.1',
+      ]
+    );
 
     res.status(201).json({
       success: true,
       message: 'New administrator account provisioned successfully.',
       admin: {
-        _id: newAdmin._id,
+        _id: newAdmin.id,
+        id: newAdmin.id,
         name: newAdmin.name,
         email: newAdmin.email,
         adminId: newAdmin.adminId,
@@ -390,6 +496,7 @@ export const createAdminAccount = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Error creating admin account:', error);
     res.status(500).json({ success: false, message: 'Failed to create administrator account.' });
   }
 };
@@ -400,19 +507,38 @@ export const createAdminAccount = async (req, res) => {
 export const getAuditLogs = async (req, res) => {
   try {
     const { action, targetType, page = 1, limit = 25 } = req.query;
-    const query = {};
-
-    if (action && action !== 'all') query.action = action;
-    if (targetType && targetType !== 'all') query.targetType = targetType;
-
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 25;
-    const skip = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
-    const [logs, total] = await Promise.all([
-      AuditLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      AuditLog.countDocuments(query),
-    ]);
+    const conditions = [];
+    const params = [];
+
+    if (action && action !== 'all') {
+      params.push(action);
+      conditions.push(`action = $${params.length}`);
+    }
+
+    if (targetType && targetType !== 'all') {
+      params.push(targetType);
+      conditions.push(`target_type = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const countRes = await query(`SELECT COUNT(*) FROM audit_logs ${whereClause}`, params);
+    const total = parseInt(countRes.rows[0].count, 10) || 0;
+
+    params.push(limitNum);
+    const limitParamIdx = params.length;
+    params.push(offset);
+    const offsetParamIdx = params.length;
+
+    const dataRes = await query(
+      `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
+      params
+    );
+    const logs = dataRes.rows.map(mapAuditLog);
 
     res.status(200).json({
       success: true,
@@ -422,6 +548,8 @@ export const getAuditLogs = async (req, res) => {
       currentPage: pageNum,
     });
   } catch (error) {
+    console.error('Error in getAuditLogs:', error);
     res.status(500).json({ success: false, message: 'Failed to retrieve audit logs.' });
   }
 };
+

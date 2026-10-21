@@ -22,11 +22,11 @@ router.get('/calendar', getCalendarEvents);
 // Authenticated Student routes
 router.get('/recommendations', protect, getRecommendedEvents);
 
-// Organizer / Admin routes
-router.get('/my-organized', protect, requireAnyRole(['organizer', 'admin']), getMyOrganizedEvents);
-router.post('/', protect, requireAnyRole(['organizer', 'admin']), createEvent);
-router.put('/:id', protect, requireAnyRole(['organizer', 'admin']), updateEvent);
-router.put('/:id/cancel', protect, requireAnyRole(['organizer', 'admin']), cancelEvent);
+// Event Management (Students submit for moderation; Organizers & Admins publish)
+router.get('/my-organized', protect, getMyOrganizedEvents);
+router.post('/', protect, createEvent);
+router.put('/:id', protect, updateEvent);
+router.put('/:id/cancel', protect, cancelEvent);
 
 // Single Event by ID
 router.get('/:id', getEventById);

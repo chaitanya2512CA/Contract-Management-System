@@ -13,6 +13,7 @@ import { protect, requireAnyRole } from '../middleware/auth.js';
 const router = express.Router();
 
 // Student Registration routes
+router.post('/', protect, registerForEvent);
 router.post('/register/:eventId', protect, registerForEvent);
 router.post('/team/:eventId', protect, registerTeam);
 router.post('/join-team/:eventId', protect, joinTeam);

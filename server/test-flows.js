@@ -174,6 +174,89 @@ async function runTests() {
       `Audit logs verify ${auditData.logs.length} administrative actions recorded`
     );
 
+    // 15. Student Login with incorrect password correctly rejected
+    const badLoginRes = await fetch(`${BASE_URL}/auth/student/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'student@college.edu', password: 'WrongPassword!999' }),
+    });
+    assert(
+      badLoginRes.status === 401,
+      'Invalid password correctly rejected with status 401'
+    );
+
+    // 16. Student creates a new campus event (moderation flow)
+    const newEventRes = await fetch(`${BASE_URL}/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${studentToken}`,
+      },
+      body: JSON.stringify({
+        title: 'Autonomous Systems & AI Hackday 2026',
+        description: 'A 24-hour university hackathon focused on agentic AI, robotics, and distributed systems.',
+        category: 'Hackathons',
+        bannerImage: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=1200',
+        eventDate: '2026-11-20',
+        startTime: '09:00 AM',
+        endTime: '09:00 PM',
+        venue: 'Auditorium Hall B',
+        venueType: 'offline',
+        maxCapacity: 50,
+        registrationDeadline: '2026-11-19T23:59:59.000Z',
+        tags: ['AI', 'Hackathon', 'Autonomous'],
+      }),
+    });
+    const newEventData = await newEventRes.json();
+    assert(
+      newEventRes.status === 201 && newEventData.event.status === 'pending_approval',
+      `Student creates event "${newEventData?.event?.title}" entering pending_approval status for admin review`
+    );
+
+    if (newEventData?.event?._id) {
+      const createdEventId = newEventData.event._id;
+
+      // 17. Admin approves the student-created event
+      const approveStudentEventRes = await fetch(`${BASE_URL}/admin/events/${createdEventId}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const approvedStudentEventData = await approveStudentEventRes.json();
+      assert(
+        approveStudentEventRes.status === 200 && approvedStudentEventData.event.status === 'approved',
+        'Admin successfully reviews and approves the student proposed event'
+      );
+
+      // 18. Student registers for the approved event
+      const regEventRes = await fetch(`${BASE_URL}/registrations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${studentToken}`,
+        },
+        body: JSON.stringify({ eventId: createdEventId }),
+      });
+      const regEventData = await regEventRes.json();
+      assert(
+        regEventRes.status === 201 && !!regEventData.registration.ticketCode,
+        `Student registers for approved event with unique ticket code: ${regEventData?.registration?.ticketCode}`
+      );
+
+      // 19. Duplicate registration attempt prevented
+      const dupRegRes = await fetch(`${BASE_URL}/registrations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${studentToken}`,
+        },
+        body: JSON.stringify({ eventId: createdEventId }),
+      });
+      assert(
+        dupRegRes.status === 400,
+        'Duplicate registration prevented with 400 error and conflict notification'
+      );
+    }
+
     console.log(`\n=== VERIFICATION SUMMARY: ${passed} PASSED, ${failed} FAILED ===`);
   } catch (err) {
     console.error('Test execution error:', err);
@@ -181,3 +264,4 @@ async function runTests() {
 }
 
 runTests();
+

@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User.js';
+import { query, mapUser } from '../config/db.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -23,14 +23,16 @@ export const protect = async (req, res, next) => {
       process.env.JWT_SECRET || 'super_secret_college_event_hub_jwt_key_2026_secured'
     );
 
-    const currentUser = await User.findById(decoded.id);
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [decoded.id]);
 
-    if (!currentUser) {
+    if (userRes.rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'The account associated with this session no longer exists.',
       });
     }
+
+    const currentUser = mapUser(userRes.rows[0]);
 
     if (!currentUser.isActive) {
       return res.status(403).json({

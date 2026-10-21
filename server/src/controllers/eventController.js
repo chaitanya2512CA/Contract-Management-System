@@ -1,8 +1,5 @@
-import { Event } from '../models/Event.js';
-import { Registration } from '../models/Registration.js';
-import { Notification } from '../models/Notification.js';
-import { AuditLog } from '../models/AuditLog.js';
-import { getAIRecommendedEvents } from '../utils/aiRecommender.js';
+import crypto from 'crypto';
+import { query, mapEvent } from '../config/db.js';
 
 /**
  * Get Public / Approved Events with Filtering & Search
@@ -19,70 +16,89 @@ export const getEvents = async (req, res) => {
       status = 'approved',
       page = 1,
       limit = 12,
-      sortBy = 'eventDate',
+      sortBy = 'event_date',
       sortOrder = 'asc',
     } = req.query;
 
-    const query = {};
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 12);
+    const offset = (pageNum - 1) * limitNum;
 
-    // Filter by status (public view only sees approved unless organizer/admin query)
+    const conditions = [];
+    const values = [];
+    let paramIndex = 1;
+
+    // Status filter
     if (status && status !== 'all') {
-      query.status = status;
+      conditions.push(`status = $${paramIndex++}`);
+      values.push(status);
     }
 
-    // Search query on title, description, or tags
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } },
-        { venue: { $regex: search, $options: 'i' } },
-      ];
+    // Category filter
+    if (category && category !== 'All' && category !== 'all') {
+      conditions.push(`category = $${paramIndex++}`);
+      values.push(category);
     }
 
-    // Filter by Category
-    if (category && category !== 'All') {
-      query.category = category;
-    }
-
-    // Filter by Venue Type
+    // Venue Type filter
     if (venueType && venueType !== 'all') {
-      query.venueType = venueType;
+      conditions.push(`venue_type = $${paramIndex++}`);
+      values.push(venueType);
     }
 
-    // Filter by Paid / Free
+    // Paid / Free filter
     if (isPaid !== undefined && isPaid !== 'all') {
-      query.isPaid = isPaid === 'true';
+      conditions.push(`is_paid = $${paramIndex++}`);
+      values.push(isPaid === 'true');
     }
 
-    // Date range filter
-    if (startDate || endDate) {
-      query.eventDate = {};
-      if (startDate) query.eventDate.$gte = new Date(startDate);
-      if (endDate) query.eventDate.$lte = new Date(endDate);
+    // Search filter
+    if (search && search.trim()) {
+      conditions.push(`(LOWER(title) LIKE $${paramIndex} OR LOWER(description) LIKE $${paramIndex} OR LOWER(venue) LIKE $${paramIndex})`);
+      values.push(`%${search.trim().toLowerCase()}%`);
+      paramIndex++;
     }
 
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 12;
-    const skip = (pageNum - 1) * limitNum;
+    // Date range
+    if (startDate) {
+      conditions.push(`event_date >= $${paramIndex++}`);
+      values.push(startDate);
+    }
+    if (endDate) {
+      conditions.push(`event_date <= $${paramIndex++}`);
+      values.push(endDate);
+    }
 
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const [events, total] = await Promise.all([
-      Event.find(query)
-        .populate('organizer', 'name email organizationName avatar')
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum),
-      Event.countDocuments(query),
-    ]);
+    // Count query
+    const countRes = await query(`SELECT COUNT(*) as total FROM events ${whereClause}`, values);
+    const total = parseInt(countRes.rows[0].total, 10);
+
+    // Order clause
+    const validSortCols = {
+      eventDate: 'event_date',
+      event_date: 'event_date',
+      registeredCount: 'registered_count',
+      registered_count: 'registered_count',
+      title: 'title',
+      created_at: 'created_at',
+    };
+    const sortCol = validSortCols[sortBy] || 'event_date';
+    const sortDir = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
+    const eventsRes = await query(
+      `SELECT * FROM events ${whereClause} ORDER BY ${sortCol} ${sortDir} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      [...values, limitNum, offset]
+    );
+
+    const events = eventsRes.rows.map(mapEvent);
 
     res.status(200).json({
       success: true,
       count: events.length,
       total,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages: Math.ceil(total / limitNum) || 1,
       currentPage: pageNum,
       events,
     });
@@ -93,28 +109,21 @@ export const getEvents = async (req, res) => {
 };
 
 /**
- * Get Single Event by ID
+ * Get Event by ID
  */
 export const getEventById = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id)
-      .populate('organizer', 'name email organizationName avatar department phone')
-      .populate('approvedBy', 'name email');
+    const { id } = req.params;
+    const eventRes = await query('SELECT * FROM events WHERE id = $1', [id]);
 
-    if (!event) {
+    if (eventRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Event not found.' });
     }
 
-    // Increment views asynchronously
-    event.views = (event.views || 0) + 1;
-    await event.save({ validateBeforeSave: false });
-
-    res.status(200).json({
-      success: true,
-      event,
-    });
+    const event = mapEvent(eventRes.rows[0]);
+    res.status(200).json({ success: true, event });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch event details.' });
+    res.status(500).json({ success: false, message: 'Failed to retrieve event details.' });
   }
 };
 
@@ -123,79 +132,205 @@ export const getEventById = async (req, res) => {
  */
 export const getTrendingEvents = async (req, res) => {
   try {
-    const events = await Event.find({ status: 'approved' })
-      .populate('organizer', 'name organizationName')
-      .sort({ registeredCount: -1, views: -1 })
-      .limit(6);
-
-    res.status(200).json({
-      success: true,
-      events,
-    });
+    const eventsRes = await query(
+      `SELECT * FROM events WHERE status = 'approved' AND event_date >= CURRENT_DATE
+       ORDER BY registered_count DESC LIMIT 6`
+    );
+    const events = eventsRes.rows.map(mapEvent);
+    res.status(200).json({ success: true, events });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch trending events.' });
+    res.status(500).json({ success: false, message: 'Failed to retrieve trending events.' });
   }
 };
 
 /**
- * Get AI Recommended Events for Authenticated Student
+ * AI-Based Event Recommendations
  */
 export const getRecommendedEvents = async (req, res) => {
   try {
-    const user = req.user;
-    const now = new Date();
+    const eventsRes = await query(
+      `SELECT * FROM events WHERE status = 'approved' AND event_date >= CURRENT_DATE
+       ORDER BY event_date ASC LIMIT 8`
+    );
 
-    // Fetch upcoming approved events
-    const upcomingEvents = await Event.find({
-      status: 'approved',
-      eventDate: { $gte: now },
-    }).populate('organizer', 'name organizationName');
-
-    const recommended = getAIRecommendedEvents(user, upcomingEvents);
-
-    res.status(200).json({
-      success: true,
-      recommendations: recommended.slice(0, 8),
+    const userInterests = req.user?.interests || ['Technology', 'Hackathons'];
+    const events = eventsRes.rows.map(row => {
+      const mapped = mapEvent(row);
+      // Calculate match score
+      let score = 70;
+      const eventTags = mapped.tags || [];
+      const matches = eventTags.filter(tag =>
+        userInterests.some(interest => interest.toLowerCase() === tag.toLowerCase())
+      );
+      score += matches.length * 10;
+      mapped.recommendationScore = Math.min(99, score);
+      return mapped;
     });
+
+    events.sort((a, b) => (b.recommendationScore || 0) - (a.recommendationScore || 0));
+
+    res.status(200).json({ success: true, count: events.length, recommendations: events, events });
   } catch (error) {
-    console.error('Error in getRecommendedEvents:', error);
-    res.status(500).json({ success: false, message: 'Failed to calculate recommendations.' });
+    res.status(500).json({ success: false, message: 'Failed to generate recommendations.' });
   }
 };
 
 /**
- * Get Calendar Events for schedule view
+ * Get Calendar Events
  */
 export const getCalendarEvents = async (req, res) => {
   try {
-    const { month, year } = req.query;
-    const query = { status: 'approved' };
-
-    if (month && year) {
-      const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0, 23, 59, 59);
-      query.eventDate = { $gte: start, $lte: end };
-    }
-
-    const events = await Event.find(query)
-      .select('title category eventDate startTime endTime venue venueType bannerImage registeredCount maxCapacity')
-      .sort({ eventDate: 1 });
-
-    res.status(200).json({
-      success: true,
-      events,
-    });
+    const eventsRes = await query(
+      `SELECT * FROM events WHERE status = 'approved' ORDER BY event_date ASC`
+    );
+    const events = eventsRes.rows.map(mapEvent);
+    res.status(200).json({ success: true, events });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch calendar events.' });
+    res.status(500).json({ success: false, message: 'Failed to load calendar events.' });
   }
 };
 
 /**
- * Create Event (Organizer or Admin)
+ * Get My Organized Events (Organizer or Student Creator)
+ */
+export const getMyOrganizedEvents = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const eventsRes = await query(
+      `SELECT * FROM events WHERE creator_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
+    const events = eventsRes.rows.map(mapEvent);
+    res.status(200).json({ success: true, events });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to retrieve organized events.' });
+  }
+};
+
+/**
+ * Create Event (By Students, Organizers, or Administrators)
+ * Student-created events enter 'pending_approval' moderation queue
  */
 export const createEvent = async (req, res) => {
   try {
-    const user = req.user;
+    const {
+      title,
+      description,
+      category,
+      bannerImage,
+      eventDate,
+      startTime,
+      endTime,
+      venue,
+      venueType = 'offline',
+      meetingUrl,
+      organizerName,
+      organizerEmail,
+      department,
+      maxCapacity,
+      registrationDeadline,
+      isPaid,
+      ticketPrice,
+      tags,
+      eligibility,
+      prerequisites,
+      isTeamEvent,
+      teamSizeMin,
+      teamSizeMax,
+    } = req.body;
+
+    if (!title || !description || !category || !eventDate || !startTime || !endTime || !venue) {
+      return res.status(400).json({
+        success: false,
+        message: 'Required event fields are missing (title, description, category, eventDate, startTime, endTime, venue).',
+      });
+    }
+
+    const creatorId = req.user.id || req.user._id;
+    const isSuperAdmin = req.user.role === 'admin';
+    // Admin events are automatically approved; Student/Organizer events enter moderation
+    const status = isSuperAdmin ? 'approved' : 'pending_approval';
+
+    const id = crypto.randomUUID();
+    const finalBanner = bannerImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1200';
+
+    const insertRes = await query(
+      `INSERT INTO events (
+        id, title, description, category, banner_image, event_date, start_time, end_time,
+        venue, venue_type, meeting_url, creator_id, organizer_name, organizer_email,
+        department, max_capacity, registered_count, registration_deadline, is_paid,
+        ticket_price, status, tags, eligibility, prerequisites, is_team_event,
+        team_size_min, team_size_max
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, 0, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+      ) RETURNING *`,
+      [
+        id,
+        title.trim(),
+        description.trim(),
+        category,
+        finalBanner,
+        eventDate,
+        startTime,
+        endTime,
+        venue.trim(),
+        venueType,
+        meetingUrl || '',
+        creatorId,
+        organizerName || req.user.name,
+        organizerEmail || req.user.email,
+        department || req.user.department || 'Campus Wide',
+        Number(maxCapacity) || 100,
+        registrationDeadline ? new Date(registrationDeadline) : new Date(Date.now() + 7 * 86400000),
+        !!isPaid,
+        Number(ticketPrice) || 0,
+        status,
+        JSON.stringify(Array.isArray(tags) ? tags : []),
+        eligibility || 'Open to all enrolled university students',
+        prerequisites || 'None',
+        !!isTeamEvent,
+        Number(teamSizeMin) || 1,
+        Number(teamSizeMax) || 4,
+      ]
+    );
+
+    const event = mapEvent(insertRes.rows[0]);
+    res.status(201).json({
+      success: true,
+      message: status === 'approved'
+        ? 'Event created and published successfully!'
+        : 'Event submitted for review! It will appear publicly once approved by campus administrators.',
+      event,
+    });
+  } catch (error) {
+    console.error('Error in createEvent:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to create event.' });
+  }
+};
+
+/**
+ * Update Event
+ */
+export const updateEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id || req.user._id;
+    const isSuperAdmin = req.user.role === 'admin';
+
+    const checkRes = await query('SELECT creator_id FROM events WHERE id = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+
+    // Authorization: only the creator or an administrator can update the event
+    if (!isSuperAdmin && checkRes.rows[0].creator_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: You are not authorized to edit events created by other users.',
+      });
+    }
+
     const {
       title,
       description,
@@ -211,158 +346,59 @@ export const createEvent = async (req, res) => {
       registrationDeadline,
       isPaid,
       ticketPrice,
+      tags,
       eligibility,
       prerequisites,
-      isTeamEvent,
-      teamMinSize,
-      teamMaxSize,
-      tags,
     } = req.body;
 
-    if (!title || !description || !category || !eventDate || !startTime || !endTime || !venue || !maxCapacity || !registrationDeadline) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide all required event parameters.',
-      });
-    }
+    const updateRes = await query(
+      `UPDATE events
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           category = COALESCE($3, category),
+           banner_image = COALESCE($4, banner_image),
+           event_date = COALESCE($5, event_date),
+           start_time = COALESCE($6, start_time),
+           end_time = COALESCE($7, end_time),
+           venue = COALESCE($8, venue),
+           venue_type = COALESCE($9, venue_type),
+           meeting_url = COALESCE($10, meeting_url),
+           max_capacity = COALESCE($11, max_capacity),
+           registration_deadline = COALESCE($12, registration_deadline),
+           is_paid = COALESCE($13, is_paid),
+           ticket_price = COALESCE($14, ticket_price),
+           tags = COALESCE($15, tags),
+           eligibility = COALESCE($16, eligibility),
+           prerequisites = COALESCE($17, prerequisites),
+           updated_at = NOW()
+       WHERE id = $18
+       RETURNING *`,
+      [
+        title ? title.trim() : null,
+        description ? description.trim() : null,
+        category || null,
+        bannerImage || null,
+        eventDate || null,
+        startTime || null,
+        endTime || null,
+        venue ? venue.trim() : null,
+        venueType || null,
+        meetingUrl !== undefined ? meetingUrl : null,
+        maxCapacity ? Number(maxCapacity) : null,
+        registrationDeadline ? new Date(registrationDeadline) : null,
+        isPaid !== undefined ? !!isPaid : null,
+        ticketPrice !== undefined ? Number(ticketPrice) : null,
+        tags ? JSON.stringify(tags) : null,
+        eligibility || null,
+        prerequisites || null,
+        id,
+      ]
+    );
 
-    // Auto-approve if created by admin, otherwise require moderation approval
-    const isAdmin = user.role === 'admin';
-    const status = isAdmin ? 'approved' : 'pending_approval';
-
-    const newEvent = await Event.create({
-      title,
-      description,
-      category,
-      bannerImage: bannerImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1200',
-      eventDate: new Date(eventDate),
-      startTime,
-      endTime,
-      venue,
-      venueType: venueType || 'offline',
-      meetingUrl: meetingUrl || '',
-      organizer: user._id,
-      organizerName: user.name,
-      organizerContact: user.email,
-      maxCapacity: Number(maxCapacity),
-      registrationDeadline: new Date(registrationDeadline),
-      isPaid: Boolean(isPaid),
-      ticketPrice: isPaid ? Number(ticketPrice) : 0,
-      eligibility: eligibility || 'Open to all college students',
-      prerequisites: prerequisites || 'None',
-      isTeamEvent: Boolean(isTeamEvent),
-      teamMinSize: isTeamEvent ? Number(teamMinSize || 1) : 1,
-      teamMaxSize: isTeamEvent ? Number(teamMaxSize || 4) : 4,
-      status,
-      approvedBy: isAdmin ? user._id : null,
-      approvedAt: isAdmin ? new Date() : null,
-      tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map((t) => t.trim()) : []),
-    });
-
-    if (isAdmin) {
-      await AuditLog.create({
-        admin: user._id,
-        adminName: user.name,
-        adminEmail: user.email,
-        action: 'CREATE_EVENT',
-        targetType: 'Event',
-        targetId: newEvent._id.toString(),
-        targetName: newEvent.title,
-        details: 'Administrator created and auto-approved college event.',
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: isAdmin
-        ? 'Event created and published successfully!'
-        : 'Event created and submitted for administrator approval.',
-      event: newEvent,
-    });
+    const event = mapEvent(updateRes.rows[0]);
+    res.status(200).json({ success: true, message: 'Event updated successfully.', event });
   } catch (error) {
-    console.error('Error in createEvent:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to create event.' });
-  }
-};
-
-/**
- * Update Event (Organizer or Admin)
- */
-export const updateEvent = async (req, res) => {
-  try {
-    const user = req.user;
-    const event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found.' });
-    }
-
-    // Ensure user is the organizer or an admin
-    if (user.role !== 'admin' && String(event.organizer) !== String(user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to edit this event.',
-      });
-    }
-
-    const updatableFields = [
-      'title',
-      'description',
-      'category',
-      'bannerImage',
-      'eventDate',
-      'startTime',
-      'endTime',
-      'venue',
-      'venueType',
-      'meetingUrl',
-      'maxCapacity',
-      'registrationDeadline',
-      'isPaid',
-      'ticketPrice',
-      'eligibility',
-      'prerequisites',
-      'isTeamEvent',
-      'teamMinSize',
-      'teamMaxSize',
-      'tags',
-    ];
-
-    updatableFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        if (field === 'eventDate' || field === 'registrationDeadline') {
-          event[field] = new Date(req.body[field]);
-        } else if (field === 'tags' && typeof req.body[field] === 'string') {
-          event.tags = req.body[field].split(',').map((t) => t.trim());
-        } else {
-          event[field] = req.body[field];
-        }
-      }
-    });
-
-    await event.save();
-
-    // Notify registered participants of update
-    const registrations = await Registration.find({ event: event._id, status: 'registered' });
-    if (registrations.length > 0) {
-      const notifications = registrations.map((reg) => ({
-        recipient: reg.user,
-        title: `Event Updated: ${event.title}`,
-        message: `The schedule or details for ${event.title} have been updated by the organizers.`,
-        type: 'event_update',
-        link: `/events/${event._id}`,
-      }));
-      await Notification.insertMany(notifications).catch(() => {});
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Event updated successfully.',
-      event,
-    });
-  } catch (error) {
-    console.error('Error in updateEvent:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to update event.' });
+    res.status(500).json({ success: false, message: 'Failed to update event.' });
   }
 };
 
@@ -371,74 +407,27 @@ export const updateEvent = async (req, res) => {
  */
 export const cancelEvent = async (req, res) => {
   try {
-    const user = req.user;
-    const { reason } = req.body;
-    const event = await Event.findById(req.params.id);
+    const { id } = req.params;
+    const userId = req.user.id || req.user._id;
+    const isSuperAdmin = req.user.role === 'admin';
 
-    if (!event) {
+    const checkRes = await query('SELECT creator_id FROM events WHERE id = $1', [id]);
+    if (checkRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Event not found.' });
     }
 
-    if (user.role !== 'admin' && String(event.organizer) !== String(user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to cancel this event.',
-      });
+    if (!isSuperAdmin && checkRes.rows[0].creator_id !== userId) {
+      return res.status(403).json({ success: false, message: 'Access denied: You cannot cancel another user event.' });
     }
 
-    event.status = 'cancelled';
-    event.rejectionReason = reason || 'Cancelled by organizer';
-    await event.save();
+    const { reason } = req.body;
+    await query(
+      `UPDATE events SET status = 'cancelled', rejection_reason = $1, updated_at = NOW() WHERE id = $2`,
+      [reason || 'Cancelled by organizer', id]
+    );
 
-    // Notify all registered participants
-    const registrations = await Registration.find({ event: event._id });
-    if (registrations.length > 0) {
-      const notifications = registrations.map((reg) => ({
-        recipient: reg.user,
-        title: `Important: ${event.title} has been cancelled`,
-        message: `Reason: ${reason || 'Event cancelled by the organizing team.'}`,
-        type: 'cancellation',
-        link: `/events/${event._id}`,
-      }));
-      await Notification.insertMany(notifications).catch(() => {});
-    }
-
-    if (user.role === 'admin') {
-      await AuditLog.create({
-        admin: user._id,
-        adminName: user.name,
-        adminEmail: user.email,
-        action: 'CANCEL_EVENT',
-        targetType: 'Event',
-        targetId: event._id.toString(),
-        targetName: event.title,
-        details: `Administrator cancelled event. Reason: ${reason || 'None provided'}`,
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Event has been cancelled and attendees notified.',
-      event,
-    });
+    res.status(200).json({ success: true, message: 'Event has been cancelled.' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to cancel event.' });
-  }
-};
-
-/**
- * Get Events Created By Logged In Organizer
- */
-export const getMyOrganizedEvents = async (req, res) => {
-  try {
-    const events = await Event.find({ organizer: req.user._id }).sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: events.length,
-      events,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch organizer events.' });
   }
 };

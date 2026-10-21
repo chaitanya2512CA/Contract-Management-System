@@ -1,7 +1,7 @@
-import mongoose from 'mongoose';
-import jwt from 'jsonwebtoken';
-import { User } from '../models/User.js';
-import { AuditLog } from '../models/AuditLog.js';
+﻿import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { query, mapUser } from '../config/db.js';
 
 // Helper to sign JWT token
 const signToken = (id, role) => {
@@ -16,31 +16,13 @@ const signToken = (id, role) => {
 
 // Send response with token and sanitized user
 const sendAuthResponse = (user, statusCode, res, message = 'Authenticated successfully') => {
-  const token = signToken(user._id, user.role);
-
-  const sanitizedUser = {
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    department: user.department,
-    studentId: user.studentId,
-    employeeId: user.employeeId,
-    adminId: user.adminId,
-    avatar: user.avatar,
-    bio: user.bio,
-    interests: user.interests,
-    organizationName: user.organizationName,
-    isActive: user.isActive,
-    graduationYear: user.graduationYear,
-    phone: user.phone,
-  };
+  const token = signToken(user.id || user._id, user.role);
 
   res.status(statusCode).json({
     success: true,
     message,
     token,
-    user: sanitizedUser,
+    user,
   });
 };
 
@@ -58,35 +40,47 @@ export const registerStudent = async (req, res) => {
       });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check duplicate
+    const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
         success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
+        message: 'An account with this email address already exists. Please sign in.',
       });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const id = crypto.randomUUID();
+
+    const insertRes = await query(
+      `INSERT INTO users (id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests, is_active)
+       VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true)
+       RETURNING *`,
+      [
+        id,
+        name.trim(),
+        cleanEmail,
+        passwordHash,
+        studentId || '',
+        department || 'General Engineering',
+        graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
+        phone || '',
+        JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
+      ]
+    );
+
+    const user = mapUser(insertRes.rows[0]);
+    sendAuthResponse(user, 201, res, 'Student account registered successfully.');
+  } catch (error) {
+    if (error.code === '23505') {
       return res.status(400).json({
         success: false,
         message: 'An account with this email address already exists.',
       });
     }
-
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      role: 'student', // Force student role
-      studentId: studentId || '',
-      department: department || 'General Engineering',
-      graduationYear: graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
-      phone: phone || '',
-      interests: Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons'],
-    });
-
-    sendAuthResponse(user, 201, res, 'Student account registered successfully.');
-  } catch (error) {
     console.error('Error in registerStudent:', error);
     res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
   }
@@ -106,34 +100,32 @@ export const registerOrganizer = async (req, res) => {
       });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
-      });
-    }
-
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'An account with this email address already exists.',
       });
     }
 
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      role: 'organizer', // Force organizer role
-      employeeId: employeeId || '',
-      department: department || 'Student Affairs',
-      organizationName,
-      phone: phone || '',
-    });
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const id = crypto.randomUUID();
 
+    const insertRes = await query(
+      `INSERT INTO users (id, name, email, password_hash, role, employee_id, department, organization_name, phone, is_active)
+       VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true)
+       RETURNING *`,
+      [id, name.trim(), cleanEmail, passwordHash, employeeId || '', department || 'Student Affairs', organizationName, phone || '']
+    );
+
+    const user = mapUser(insertRes.rows[0]);
     sendAuthResponse(user, 201, res, 'Organizer account registered successfully.');
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
+    }
     console.error('Error in registerOrganizer:', error);
     res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
   }
@@ -153,22 +145,18 @@ export const loginStudent = async (req, res) => {
       });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
-      });
-    }
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user) {
+    if (userRes.rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials. Please verify your email and password.',
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -176,27 +164,28 @@ export const loginStudent = async (req, res) => {
       });
     }
 
-    if (user.role !== 'student') {
+    if (row.role !== 'student') {
       return res.status(403).json({
         success: false,
-        message: `This portal is for students only. Your account has the role "${user.role}". Please use the ${user.role} portal.`,
+        message: `This portal is for students only. Your account has the role "${row.role}". Please use the ${row.role} portal.`,
       });
     }
 
-    if (!user.isActive) {
+    if (row.is_active === false) {
       return res.status(403).json({
         success: false,
-        message: 'Your student account is suspended. Please contact the campus admin.',
+        message: 'Your student account is suspended. Please contact campus administration.',
       });
     }
 
-    user.lastLogin = new Date();
-    await user.save({ validateBeforeSave: false });
+    // Update last_login
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
+    const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Welcome back to CampusPulse!');
   } catch (error) {
     console.error('Error in loginStudent:', error);
-    res.status(500).json({ success: false, message: 'Server error during login.' });
+    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
   }
 };
 
@@ -214,22 +203,18 @@ export const loginOrganizer = async (req, res) => {
       });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
-      });
-    }
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user) {
+    if (userRes.rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials. Please verify your email and password.',
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -237,34 +222,33 @@ export const loginOrganizer = async (req, res) => {
       });
     }
 
-    // Must be organizer or admin
-    if (user.role !== 'organizer' && user.role !== 'admin') {
+    if (row.role !== 'organizer' && row.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Access denied. Only registered Event Organizers and Administrators can access this portal.',
       });
     }
 
-    if (!user.isActive) {
+    if (row.is_active === false) {
       return res.status(403).json({
         success: false,
         message: 'Your organizer account is deactivated.',
       });
     }
 
-    user.lastLogin = new Date();
-    await user.save({ validateBeforeSave: false });
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
+    const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Organizer portal authentication successful.');
   } catch (error) {
     console.error('Error in loginOrganizer:', error);
-    res.status(500).json({ success: false, message: 'Server error during login.' });
+    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
   }
 };
 
 /**
  * Dedicated Administrator Login Portal Endpoint (/admin/login)
- * Strictly enforces admin role and logs audit events
+ * Strictly enforces admin role and records audit trail
  */
 export const loginAdmin = async (req, res) => {
   try {
@@ -277,24 +261,18 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection or MONGO_URI configuration.',
-      });
-    }
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-
-    // Safe error message to avoid account harvesting
-    if (!user) {
+    if (userRes.rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'Invalid administrative credentials or unauthorized account.',
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -303,54 +281,58 @@ export const loginAdmin = async (req, res) => {
     }
 
     // STRICT CHECK: Student or Organizer CANNOT log in through the admin portal!
-    if (user.role !== 'admin') {
+    if (row.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Access denied: You do not possess institutional administrator privileges.',
       });
     }
 
-    if (!user.isActive) {
+    if (row.is_active === false) {
       return res.status(403).json({
         success: false,
-        message: 'Administrator account has been locked or deactivated.',
+        message: 'Administrator account suspended. Contact campus chief IT officer.',
       });
     }
 
-    user.lastLogin = new Date();
-    await user.save({ validateBeforeSave: false });
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
-    // Record audit log for successful admin authentication
-    await AuditLog.create({
-      admin: user._id,
-      adminName: user.name,
-      adminEmail: user.email,
-      action: 'ADMIN_LOGIN',
-      targetType: 'System',
-      targetName: 'Admin Control Center',
-      details: 'Administrator logged into the centralized campus management panel.',
-      ipAddress: req.ip || '127.0.0.1',
-    });
+    // Record audit log
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
+         VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
+        [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+      );
+    } catch (e) {
+      // Non-blocking audit record
+    }
 
-    sendAuthResponse(user, 200, res, 'Administrator authentication verified. Access granted.');
+    const user = mapUser(row);
+    sendAuthResponse(user, 200, res, 'Administrator portal authentication successful.');
   } catch (error) {
     console.error('Error in loginAdmin:', error);
-    res.status(500).json({ success: false, message: 'Server error during admin authentication.' });
+    res.status(500).json({ success: false, message: error.message || 'Server error during admin login.' });
   }
 };
 
 /**
- * Get Current Authenticated Profile
+ * Get Current Authenticated User Profile
  */
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [req.user.id || req.user._id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const user = mapUser(userRes.rows[0]);
     res.status(200).json({
       success: true,
       user,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch user profile.' });
+    res.status(500).json({ success: false, message: 'Failed to retrieve profile.' });
   }
 };
 
@@ -359,24 +341,34 @@ export const getMe = async (req, res) => {
  */
 export const updateProfile = async (req, res) => {
   try {
-    const { name, phone, bio, department, graduationYear, interests, avatar, organizationName } = req.body;
+    const { name, phone, bio, department, graduationYear, interests, organizationName } = req.body;
+    const userId = req.user.id || req.user._id;
 
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    const updateRes = await query(
+      `UPDATE users
+       SET name = COALESCE($1, name),
+           phone = COALESCE($2, phone),
+           bio = COALESCE($3, bio),
+           department = COALESCE($4, department),
+           graduation_year = COALESCE($5, graduation_year),
+           interests = COALESCE($6, interests),
+           organization_name = COALESCE($7, organization_name),
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [
+        name ? name.trim() : null,
+        phone ? phone.trim() : null,
+        bio !== undefined ? bio : null,
+        department || null,
+        graduationYear ? Number(graduationYear) : null,
+        interests ? JSON.stringify(interests) : null,
+        organizationName || null,
+        userId,
+      ]
+    );
 
-    if (name) user.name = name;
-    if (phone !== undefined) user.phone = phone;
-    if (bio !== undefined) user.bio = bio;
-    if (department) user.department = department;
-    if (graduationYear) user.graduationYear = Number(graduationYear);
-    if (Array.isArray(interests)) user.interests = interests;
-    if (avatar) user.avatar = avatar;
-    if (organizationName && user.role !== 'student') user.organizationName = organizationName;
-
-    await user.save();
-
+    const user = mapUser(updateRes.rows[0]);
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully.',
@@ -393,6 +385,7 @@ export const updateProfile = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id || req.user._id;
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
@@ -401,8 +394,19 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id).select('+password');
-    const isMatch = await user.comparePassword(currentPassword);
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long.',
+      });
+    }
+
+    const userRes = await query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, userRes.rows[0].password_hash);
     if (!isMatch) {
       return res.status(400).json({
         success: false,
@@ -410,8 +414,9 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    user.password = newPassword;
-    await user.save();
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
 
     res.status(200).json({
       success: true,
@@ -423,7 +428,7 @@ export const changePassword = async (req, res) => {
 };
 
 /**
- * Forgot Password (Development Simulation)
+ * Forgot Password
  */
 export const forgotPassword = async (req, res) => {
   try {
@@ -432,25 +437,18 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide your registered email address.' });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service is currently unavailable. Please verify the database connection.',
-      });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT name FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'No registered student account found with this email address. Please register for an account.',
       });
     }
 
-    // Honest guidance: automated email dispatch is not configured in this demo
     res.status(200).json({
       success: true,
-      message: `Account found for ${user.name}. In this campus demo environment, automated email dispatch is not enabled. Please sign in using the configured demo credentials (student@college.edu / Student@12345) or contact the campus administrator at admin@college.edu.`,
+      message: `Account found for ${userRes.rows[0].name}. In this campus demo environment, automated email dispatch is not enabled. Please sign in using the configured demo credentials (student@college.edu / Student@12345) or contact campus administration at admin@college.edu.`,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error processing password reset request.' });
