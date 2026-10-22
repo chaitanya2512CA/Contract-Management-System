@@ -43,27 +43,41 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    service: 'CampusPulse College Event Management System API',
-  });
+import { getSafeDatabaseInfo } from './config/db.js';
+
+// Health check endpoint with real-time Neon PostgreSQL diagnostics
+app.get(['/api/health', '/health'], async (req, res) => {
+  try {
+    const dbInfo = await getSafeDatabaseInfo();
+    const status = dbInfo.connected ? 'healthy' : 'degraded';
+    res.status(200).json({
+      status,
+      timestamp: new Date().toISOString(),
+      service: 'CampusPulse College Event Management System API',
+      database: dbInfo,
+    });
+  } catch (err) {
+    res.status(200).json({
+      status: 'degraded',
+      timestamp: new Date().toISOString(),
+      service: 'CampusPulse College Event Management System API',
+      error: err.message,
+    });
+  }
 });
 
-// Mount application API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/registrations', registrationRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/certificates', certificateRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/notifications', notificationRoutes);
+// Mount application API routes (supporting both /api/* and stripped /* paths)
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/events', '/events'], eventRoutes);
+app.use(['/api/registrations', '/registrations'], registrationRoutes);
+app.use(['/api/attendance', '/attendance'], attendanceRoutes);
+app.use(['/api/certificates', '/certificates'], certificateRoutes);
+app.use(['/api/admin', '/admin'], adminRoutes);
+app.use(['/api/announcements', '/announcements'], announcementRoutes);
+app.use(['/api/notifications', '/notifications'], notificationRoutes);
 
 // 404 Handler for undefined API routes
-app.use('/api/*', (req, res) => {
+app.use(['/api/*', '/api'], (req, res) => {
   res.status(404).json({
     success: false,
     message: `API route not found: ${req.method} ${req.originalUrl}`,

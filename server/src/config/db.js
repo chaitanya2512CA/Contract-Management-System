@@ -8,68 +8,171 @@ const __dirname = path.dirname(__filename);
 
 const { Pool } = pg;
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  process.env.POSTGRES_URL ||
-  process.env.DATABASE_URL_UNPOOLED ||
-  process.env.NEON_DATABASE_URL;
+/**
+ * Dynamic Neon PostgreSQL connection string resolver
+ * Resolves standard Neon & Vercel environment variables dynamically
+ */
+export const getConnectionString = () => {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.NEON_DATABASE_URL ||
+    process.env.NEON_URL ||
+    (process.env.POSTGRES_HOST && process.env.POSTGRES_USER && process.env.POSTGRES_PASSWORD
+      ? `postgres://${process.env.POSTGRES_USER}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}/${process.env.POSTGRES_DATABASE || 'neondb'}?sslmode=require`
+      : null)
+  );
+};
 
 let isReady = false;
-let activePool = null;
+let isSchemaInitialized = false;
 
-if (connectionString) {
-  activePool = new Pool({
-    connectionString,
-    ssl: !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
-      ? { rejectUnauthorized: false }
-      : false,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-  });
-}
+// Global pool reuse for Vercel Serverless Functions
+const getActivePool = () => {
+  if (global.__neonPgPool) {
+    return global.__neonPgPool;
+  }
+  return null;
+};
+
+const setActivePool = (p) => {
+  global.__neonPgPool = p;
+};
 
 export const pool = {
   query: async (...args) => {
-    if (!activePool) await connectDB();
-    return activePool.query(...args);
+    const p = getActivePool();
+    if (!p) {
+      await connectDB();
+      return getActivePool().query(...args);
+    }
+    return p.query(...args);
   },
   connect: async (...args) => {
-    if (!activePool) await connectDB();
-    return activePool.connect(...args);
+    const p = getActivePool();
+    if (!p) {
+      await connectDB();
+      return getActivePool().connect(...args);
+    }
+    return p.connect(...args);
   },
   end: async (...args) => {
-    if (activePool && activePool.end) return activePool.end(...args);
+    const p = getActivePool();
+    if (p && p.end) return p.end(...args);
     return Promise.resolve();
   },
 };
 
 export const query = async (text, params) => {
-  if (!activePool) {
+  const p = getActivePool();
+  if (!p) {
     await connectDB();
+    return getActivePool().query(text, params);
   }
-  return activePool.query(text, params);
+  return p.query(text, params);
 };
 
 export const getClient = async () => {
-  if (!activePool) {
+  const p = getActivePool();
+  if (!p) {
     await connectDB();
+    return getActivePool().connect();
   }
-  return activePool.connect();
+  return p.connect();
 };
 
 export const isDatabaseConnected = () => {
-  return isReady && !!activePool;
+  return isReady && !!getActivePool();
 };
 
-let isSchemaInitialized = false;
+/**
+ * Returns safe database metadata without leaking credentials
+ */
+export const getSafeDatabaseInfo = async () => {
+  const connStr = getConnectionString();
+  const isVercel = !!process.env.VERCEL;
+  const isProd = process.env.NODE_ENV === 'production';
+  const currentPool = getActivePool();
+
+  let hostMasked = 'none';
+  if (connStr) {
+    try {
+      const parsed = new URL(connStr.replace(/^postgres:/, 'http:'));
+      const host = parsed.hostname;
+      if (host.length > 8) {
+        hostMasked = `${host.slice(0, 3)}***${host.slice(-4)}`;
+      } else {
+        hostMasked = 'configured';
+      }
+    } catch (_) {
+      hostMasked = 'configured';
+    }
+  }
+
+  if (!currentPool) {
+    return {
+      connected: false,
+      ready: false,
+      isMemory: false,
+      environment: isVercel ? 'vercel' : (isProd ? 'production' : 'development'),
+      connectionConfigured: !!connStr,
+      host: hostMasked,
+    };
+  }
+
+  let dbName = 'neondb';
+  let serverTime = null;
+  let isMemory = false;
+
+  try {
+    const res = await currentPool.query('SELECT NOW() as server_time');
+    if (res && res.rows && res.rows[0]) {
+      serverTime = res.rows[0].server_time;
+    }
+    try {
+      const dbRes = await currentPool.query('SELECT current_database() as db_name');
+      if (dbRes?.rows?.[0]?.db_name) {
+        dbName = dbRes.rows[0].db_name;
+      }
+    } catch (_) {
+      dbName = connStr ? 'neondb' : 'local_memory';
+    }
+
+    if (currentPool.constructor && (currentPool.constructor.name === 'MemPool' || !connStr)) {
+      isMemory = true;
+    }
+  } catch (err) {
+    return {
+      connected: false,
+      ready: false,
+      error: err.message,
+      environment: isVercel ? 'vercel' : (isProd ? 'production' : 'development'),
+      connectionConfigured: !!connStr,
+      host: hostMasked,
+    };
+  }
+
+  return {
+    connected: isReady && !!currentPool,
+    ready: isReady,
+    databaseName: dbName,
+    serverTime,
+    isMemory,
+    environment: isVercel ? 'vercel' : (isProd ? 'production' : 'development'),
+    host: hostMasked,
+  };
+};
 
 /**
  * Initialize schema tables and indexes in Neon PostgreSQL
  */
 export const initSchema = async () => {
   if (isSchemaInitialized) return true;
-  if (!activePool) {
+  const currentPool = getActivePool();
+  if (!currentPool) {
     console.warn('[DB] Database pool not ready for schema initialization.');
     return false;
   }
@@ -78,14 +181,14 @@ export const initSchema = async () => {
     const schemaPath = path.join(__dirname, 'schema.sql');
     if (fs.existsSync(schemaPath)) {
       const sql = fs.readFileSync(schemaPath, 'utf8');
-      await activePool.query(sql);
+      await currentPool.query(sql);
 
       // Safe progressive migrations for existing Neon database instances
       try {
-        await activePool.query(`ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`);
+        await currentPool.query(`ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`);
       } catch (_) {}
       try {
-        await activePool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`);
+        await currentPool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`);
       } catch (_) {}
 
       console.log('[DB] Neon PostgreSQL schema verified & initialized successfully.');
@@ -101,52 +204,75 @@ export const initSchema = async () => {
 };
 
 export const connectDB = async () => {
-  if (isReady && activePool) return;
+  let existingPool = getActivePool();
+  if (isReady && existingPool) {
+    return;
+  }
 
-  if (connectionString) {
+  const connStr = getConnectionString();
+  const isVercel = !!process.env.VERCEL;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (connStr) {
     try {
-      console.log('[DB] Connecting to Neon PostgreSQL Cloud Database...');
-      activePool = new Pool({
-        connectionString,
-        ssl: !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
-          ? { rejectUnauthorized: false }
-          : false,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+      console.log('[DB] Initializing Neon PostgreSQL pool connection...');
+      const isSsl = !connStr.includes('localhost') && !connStr.includes('127.0.0.1');
+      const newPool = new Pool({
+        connectionString: connStr,
+        ssl: isSsl ? { rejectUnauthorized: false } : false,
+        max: isVercel ? 3 : 10,
+        idleTimeoutMillis: 15000,
+        connectionTimeoutMillis: 10000,
       });
-      const client = await activePool.connect();
-      const res = await client.query('SELECT NOW() as current_time, current_database() as db_name');
+
+      const client = await newPool.connect();
+      const res = await client.query('SELECT NOW() as server_time, current_database() as db_name');
       client.release();
-      console.log(`[DB] Connected to Neon PostgreSQL [${res.rows[0].db_name}] at ${res.rows[0].current_time}`);
+
+      setActivePool(newPool);
+      console.log(`[DB] Connected to Neon PostgreSQL [${res.rows[0].db_name}] at ${res.rows[0].server_time}`);
       await initSchema();
       isReady = true;
     } catch (err) {
-      console.warn(`[DB] Neon PostgreSQL connection warning: ${err.message}`);
-      if (process.env.NODE_ENV === 'production') {
-        console.error('[DB] Please ensure DATABASE_URL is added to Vercel Project Settings.');
-      }
+      console.error(`[DB] Neon PostgreSQL connection failed: ${err.message}`);
+      isReady = false;
+      throw err;
     }
   } else {
+    // In production or Vercel, NEVER silently switch to memory DB
+    if (isVercel || isProduction) {
+      const errorMsg = '[DB] Neon PostgreSQL connection string not found. Please add DATABASE_URL or POSTGRES_URL to your Vercel Project Environment Variables.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Only in local development / offline testing, initialize pg-mem
     try {
-      console.log('[DB] DATABASE_URL not set in local environment. Initializing local PostgreSQL engine via pg-mem...');
+      console.log('[DB] DATABASE_URL not set in local dev environment. Initializing local pg-mem PostgreSQL engine...');
       const { newDb } = await import('pg-mem');
       const memDb = newDb();
+      memDb.public.registerFunction({
+        name: 'current_database',
+        implementation: () => 'campus_pulse_local',
+      });
       const { Pool: MemPool } = memDb.adapters.createPg();
-      activePool = new MemPool();
+      setActivePool(new MemPool());
       await initSchema();
       console.log('[DB] Local PostgreSQL engine active with full schema support.');
       isReady = true;
     } catch (err) {
       console.error('[DB] Error initializing local PostgreSQL engine:', err.message);
+      throw err;
     }
   }
 };
 
 export const closeDB = async () => {
-  if (activePool && activePool.end) {
-    await activePool.end();
+  const p = getActivePool();
+  if (p && p.end) {
+    await p.end();
   }
+  setActivePool(null);
   isReady = false;
 };
 
