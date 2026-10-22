@@ -113,7 +113,33 @@ async function runTests() {
       'Organizer demo account logs in successfully with valid session'
     );
 
-    // 9. Input Validation: Short password rejected for new registrations
+    // 9. Input Validation: Missing fields rejected for new registrations
+    const missingFieldsReg = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Incomplete User' }),
+    });
+    assert(
+      missingFieldsReg.status === 400,
+      'Registration with missing email and password rejected with status 400'
+    );
+
+    // 10. Input Validation: Invalid email rejected
+    const invalidEmailReg = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Invalid Email User',
+        email: 'not-an-email',
+        password: 'ValidPassword@12345',
+      }),
+    });
+    assert(
+      invalidEmailReg.status === 400,
+      'Registration with malformed email rejected with status 400'
+    );
+
+    // 11. Input Validation: Short password rejected for new registrations
     const shortPasswordReg = await fetch(`${BASE_URL}/auth/student/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,6 +153,78 @@ async function runTests() {
     assert(
       shortPasswordReg.status === 400,
       'Password shorter than 12 characters rejected with status 400'
+    );
+
+    // 12. Full Student Registration Flow: Creating new student record in Neon PostgreSQL
+    const newStudentEmail = 'elena.rostova@college.edu';
+    const newStudentPassword = 'SecureStudent@2026';
+    const registerStudentRes = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Elena Rostova',
+        email: newStudentEmail,
+        password: newStudentPassword,
+        studentId: 'STU-ELENA-2026',
+        department: 'Computer Science & Engineering',
+        graduationYear: 2027,
+        phone: '+1-555-0199',
+        interests: ['Artificial Intelligence', 'Hackathons'],
+      }),
+    });
+    const registerStudentData = await registerStudentRes.json();
+    assert(
+      registerStudentRes.status === 201 && registerStudentData.token && registerStudentData.user.email === newStudentEmail,
+      `Student registration succeeds with status 201 and JWT: "${registerStudentData.user?.name}"`
+    );
+
+    // 13. Verify Database Persistence: Direct query to verify stored record & hashed password
+    const { query } = await import('./src/config/db.js');
+    const dbCheck = await query('SELECT id, name, email, password_hash, role, student_id FROM users WHERE LOWER(email) = $1', [newStudentEmail]);
+    assert(
+      dbCheck.rows.length === 1 &&
+      dbCheck.rows[0].password_hash.startsWith('$2') &&
+      dbCheck.rows[0].password_hash !== newStudentPassword &&
+      dbCheck.rows[0].role === 'student',
+      'Student record is persisted in PostgreSQL with securely hashed password'
+    );
+
+    // 14. Verify Login Against Persisted Database Records
+    const newStudentLoginRes = await fetch(`${BASE_URL}/auth/student/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: newStudentEmail, password: newStudentPassword }),
+    });
+    const newStudentLoginData = await newStudentLoginRes.json();
+    assert(
+      newStudentLoginRes.status === 200 && newStudentLoginData.token && newStudentLoginData.user.name === 'Elena Rostova',
+      'Newly registered student logs in successfully by authenticating against database'
+    );
+    const newStudentToken = newStudentLoginData.token;
+
+    // 15. Verify Session / Profile Retrieval via GET /auth/me
+    const getMeRes = await fetch(`${BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${newStudentToken}` },
+    });
+    const getMeData = await getMeRes.json();
+    assert(
+      getMeRes.status === 200 && getMeData.user && getMeData.user.studentId === 'STU-ELENA-2026',
+      'Student retrieves persistent profile session from database via /api/auth/me'
+    );
+
+    // 16. Duplicate Registration Rejected
+    const duplicateStudentReg = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Elena Rostova Duplicate',
+        email: newStudentEmail,
+        password: newStudentPassword,
+      }),
+    });
+    assert(
+      duplicateStudentReg.status === 400,
+      'Duplicate student registration rejected with status 400'
     );
 
     // 10. Input Validation: Long title rejected for events

@@ -99,9 +99,15 @@ export const StudentRegisterPage: React.FC = () => {
       });
       navigate('/student/dashboard');
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.message || 'Failed to create student account. Please try again.'
-      );
+      if (err.response?.data?.message) {
+        setErrorMessage(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setErrorMessage(
+          'Unable to reach the campus authentication server. Please check your network connection.'
+        );
+      } else {
+        setErrorMessage('Failed to create student account. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

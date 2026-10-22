@@ -47,7 +47,17 @@ export const registerStudent = async (req, res) => {
       });
     }
 
-    if (email.trim().length > 254) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid college email address.',
+      });
+    }
+
+    if (cleanEmail.length > 254) {
       return res.status(400).json({
         success: false,
         message: 'Email cannot exceed 254 characters.',
@@ -68,10 +78,8 @@ export const registerStudent = async (req, res) => {
       });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-
-    // Check duplicate
-    const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    // Check duplicate email
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
     if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
@@ -92,10 +100,10 @@ export const registerStudent = async (req, res) => {
         name.trim(),
         cleanEmail,
         passwordHash,
-        studentId || '',
+        studentId ? studentId.trim() : '',
         department || 'General Engineering',
         graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
-        phone || '',
+        phone ? phone.trim() : '',
         JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
       ]
     );
@@ -106,11 +114,13 @@ export const registerStudent = async (req, res) => {
     if (error.code === '23505') {
       return res.status(400).json({
         success: false,
-        message: 'An account with this email address already exists.',
+        message: 'An account with this email address already exists. Please sign in.',
       });
     }
     console.error('Error in registerStudent:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
+    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
+    const statusCode = isConnError ? 503 : 500;
+    res.status(statusCode).json({ success: false, message: error.message || 'Server error during registration.' });
   }
 };
 
@@ -234,7 +244,9 @@ export const loginStudent = async (req, res) => {
     sendAuthResponse(user, 200, res, 'Welcome back to CampusPulse!');
   } catch (error) {
     console.error('Error in loginStudent:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
+    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
+    const statusCode = isConnError ? 503 : 500;
+    res.status(statusCode).json({ success: false, message: error.message || 'Server error during login.' });
   }
 };
 

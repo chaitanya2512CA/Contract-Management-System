@@ -1,4 +1,7 @@
-﻿import app from '../server/src/app.js';
+import dotenv from 'dotenv';
+dotenv.config();
+
+import app from '../server/src/app.js';
 import { connectDB } from '../server/src/config/db.js';
 import { seedDatabase } from '../server/src/config/seed.js';
 

@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { SCHEMA_SQL } from './schema.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,8 +25,15 @@ export const getConnectionString = () => {
     process.env.DATABASE_URL_UNPOOLED ||
     process.env.NEON_DATABASE_URL ||
     process.env.NEON_URL ||
+    process.env.POSTGRES_URL_NO_SSL ||
+    process.env.VERCEL_POSTGRES_URL ||
+    process.env.DB_URL ||
+    process.env.DATABASE_URI ||
+    (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD
+      ? `postgres://${encodeURIComponent(process.env.PGUSER)}:${encodeURIComponent(process.env.PGPASSWORD)}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE || 'neondb'}?sslmode=require`
+      : null) ||
     (process.env.POSTGRES_HOST && process.env.POSTGRES_USER && process.env.POSTGRES_PASSWORD
-      ? `postgres://${process.env.POSTGRES_USER}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}/${process.env.POSTGRES_DATABASE || 'neondb'}?sslmode=require`
+      ? `postgres://${encodeURIComponent(process.env.POSTGRES_USER)}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT || 5432}/${process.env.POSTGRES_DATABASE || 'neondb'}?sslmode=require`
       : null)
   );
 };
@@ -178,29 +189,49 @@ export const initSchema = async () => {
   }
 
   try {
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    if (fs.existsSync(schemaPath)) {
-      const sql = fs.readFileSync(schemaPath, 'utf8');
-      await currentPool.query(sql);
-
-      // Safe progressive migrations for existing Neon database instances
-      try {
-        await currentPool.query(`ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`);
-      } catch (_) {}
-      try {
-        await currentPool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`);
-      } catch (_) {}
-
-      console.log('[DB] Neon PostgreSQL schema verified & initialized successfully.');
-      isSchemaInitialized = true;
-      isReady = true;
-      return true;
+    // Execute bundled schema SQL directly (guaranteed to be available in serverless environments)
+    if (SCHEMA_SQL) {
+      await currentPool.query(SCHEMA_SQL);
+    } else {
+      const schemaPath = path.join(__dirname, 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const sql = fs.readFileSync(schemaPath, 'utf8');
+        await currentPool.query(sql);
+      }
     }
+
+    // Safe progressive non-destructive migrations for existing Neon database instances
+    const migrations = [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id VARCHAR(50) DEFAULT '';`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id VARCHAR(50) DEFAULT '';`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_id VARCHAR(50) DEFAULT '';`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT 'General';`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS graduation_year INT DEFAULT 2026;`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30) DEFAULT '';`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS interests JSONB DEFAULT '["Technology", "Hackathons"]'::jsonb;`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;`,
+      `ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`,
+      `ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS qr_code_data TEXT DEFAULT '';`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));`
+    ];
+
+    for (const statement of migrations) {
+      try {
+        await currentPool.query(statement);
+      } catch (_) {
+        // Safe to ignore if already applied
+      }
+    }
+
+    console.log('[DB] Neon PostgreSQL schema verified & initialized successfully.');
+    isSchemaInitialized = true;
+    isReady = true;
+    return true;
   } catch (err) {
     console.error('[DB] Failed to execute schema initialization:', err.message);
     throw err;
   }
-  return false;
 };
 
 export const connectDB = async () => {
