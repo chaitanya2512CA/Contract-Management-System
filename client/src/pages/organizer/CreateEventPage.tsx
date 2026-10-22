@@ -143,16 +143,22 @@ export const CreateEventPage: React.FC = () => {
           </h2>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Event Title *
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Event Title *
+              </label>
+              <span className={`text-[10px] ${title.length > 140 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                {title.length} / 150
+              </span>
+            </div>
             <input
               type="text"
               required
+              maxLength={150}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. HackCampus 2026: 36-Hour National Hackathon"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
             />
           </div>
 
@@ -189,16 +195,22 @@ export const CreateEventPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Detailed Description *
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Detailed Description *
+              </label>
+              <span className={`text-[10px] ${description.length > 1900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                {description.length} / 2000
+              </span>
+            </div>
             <textarea
               required
               rows={4}
+              maxLength={2000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe event highlights, guest speakers, learning objectives, schedules, prizes, etc."
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
             />
           </div>
 
@@ -307,16 +319,22 @@ export const CreateEventPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Campus Venue / Room *
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Campus Venue / Room *
+                </label>
+                <span className={`text-[10px] ${venue.length > 180 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                  {venue.length} / 200
+                </span>
+              </div>
               <input
                 type="text"
                 required
+                maxLength={200}
                 value={venue}
                 onChange={(e) => setVenue(e.target.value)}
                 placeholder="Main Auditorium, Science Block Room 304"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               />
             </div>
           </div>

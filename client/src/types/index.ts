@@ -38,6 +38,7 @@ export type EventStatus =
 
 export interface CollegeEvent {
   _id: string;
+  id?: string;
   title: string;
   description: string;
   category: EventCategory;
@@ -48,9 +49,10 @@ export interface CollegeEvent {
   venue: string;
   venueType: 'offline' | 'online' | 'hybrid';
   meetingUrl?: string;
-  organizer: User | string;
+  organizer?: User | string;
   organizerName?: string;
   organizerContact?: string;
+  department?: string;
   maxCapacity: number;
   registeredCount: number;
   waitlistCount?: number;
@@ -74,7 +76,7 @@ export interface CollegeEvent {
   createdAt: string;
 }
 
-export type RegistrationStatus = 'registered' | 'waitlisted' | 'attended' | 'cancelled';
+export type RegistrationStatus = 'registered' | 'confirmed' | 'waitlisted' | 'attended' | 'cancelled';
 
 export interface Registration {
   _id: string;

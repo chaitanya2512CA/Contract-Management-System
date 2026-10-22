@@ -129,6 +129,28 @@ export const certificateService = {
 export const adminService = {
   getStats: () => api.get('/admin/stats'),
 
+  // Event Management (CRUD & Lifecycle)
+  getAllEvents: (params?: any) => api.get('/admin/events', { params }),
+
+  createEvent: (data: any) => api.post('/admin/events', data),
+
+  updateEvent: (eventId: string, data: any) => api.put(`/admin/events/${eventId}`, data),
+
+  updateEventStatus: (eventId: string, status: string) =>
+    api.put(`/admin/events/${eventId}/status`, { status }),
+
+  deleteEvent: (eventId: string) => api.delete(`/admin/events/${eventId}`),
+
+  // Event Attendance & CSV Export
+  getEventAttendance: (eventId: string, params?: any) =>
+    api.get(`/admin/events/${eventId}/attendance`, { params }),
+
+  updateAttendanceStatus: (eventId: string, registrationId: string, status: string) =>
+    api.put(`/admin/events/${eventId}/attendance/${registrationId}`, { status }),
+
+  exportAttendanceCSV: (eventId: string) =>
+    api.get(`/admin/events/${eventId}/attendance/export-csv`, { responseType: 'blob' }),
+
   getPendingEvents: () => api.get('/admin/events/pending'),
 
   approveEvent: (eventId: string) => api.put(`/admin/events/${eventId}/approve`),

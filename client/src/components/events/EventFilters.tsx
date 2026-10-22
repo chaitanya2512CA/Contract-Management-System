@@ -46,6 +46,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
+          maxLength={100}
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search by event title, topic, tags, keywords, or campus venue..."

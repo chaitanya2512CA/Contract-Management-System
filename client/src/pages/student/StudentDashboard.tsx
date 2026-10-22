@@ -32,43 +32,48 @@ export const StudentDashboard: React.FC = () => {
   const [allEvents, setAllEvents] = useState<CollegeEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   // Filters state
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [price, setPrice] = useState('all');
   const [venueType, setVenueType] = useState('all');
 
+  const loadDashboardData = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const [recRes, trendRes, myRegRes, eventsRes] = await Promise.all([
+        eventService.getRecommendedEvents().catch(() => ({ data: { recommendations: [] } })),
+        eventService.getTrendingEvents().catch(() => ({ data: { events: [] } })),
+        registrationService.getMyRegistrations().catch(() => ({ data: { registrations: [] } })),
+        eventService.getEvents({ limit: 12 }).catch(() => ({ data: { events: [] } })),
+      ]);
+
+      setAiRecommendations(recRes.data?.recommendations || []);
+      setTrendingEvents(trendRes.data?.events || []);
+      setAllEvents(eventsRes.data?.events || []);
+
+      const myRegs: Registration[] = myRegRes.data?.registrations || [];
+      const activeCount = myRegs.filter((r) => r.status === 'registered' || r.status === 'confirmed').length;
+      const attendedCount = myRegs.filter((r) => r.status === 'attended').length;
+      const certCount = myRegs.filter((r) => r.certificateIssued).length;
+
+      setStats({
+        registered: activeCount,
+        attended: attendedCount,
+        certificates: certCount,
+      });
+    } catch (err: any) {
+      console.error('Error loading student dashboard data', err);
+      setLoadError(err?.message || 'Failed to sync latest campus event data.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadDashboardData = async () => {
-      setIsLoading(true);
-      try {
-        const [recRes, trendRes, myRegRes, eventsRes] = await Promise.all([
-          eventService.getRecommendedEvents().catch(() => ({ data: { recommendations: [] } })),
-          eventService.getTrendingEvents().catch(() => ({ data: { events: [] } })),
-          registrationService.getMyRegistrations().catch(() => ({ data: { registrations: [] } })),
-          eventService.getEvents({ limit: 12 }).catch(() => ({ data: { events: [] } })),
-        ]);
-
-        setAiRecommendations(recRes.data?.recommendations || []);
-        setTrendingEvents(trendRes.data?.events || []);
-        setAllEvents(eventsRes.data?.events || []);
-
-        const myRegs: Registration[] = myRegRes.data?.registrations || [];
-        const attendedCount = myRegs.filter((r) => r.status === 'attended').length;
-        const certCount = myRegs.filter((r) => r.certificateIssued).length;
-
-        setStats({
-          registered: myRegs.filter((r) => r.status === 'registered').length,
-          attended: attendedCount,
-          certificates: certCount,
-        });
-      } catch (err) {
-        console.error('Error loading student dashboard data', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadDashboardData();
   }, []);
 
@@ -93,6 +98,20 @@ export const StudentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
+      {loadError && (
+        <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <span>⚠️ {loadError}</span>
+          </div>
+          <button
+            onClick={() => loadDashboardData()}
+            className="rounded-lg bg-amber-600 px-3 py-1 font-bold text-white hover:bg-amber-700 transition"
+          >
+            Retry Loading
+          </button>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-600 p-6 sm:p-10 text-white shadow-xl shadow-indigo-200 dark:shadow-none">
         <div className="relative z-10 max-w-2xl">
@@ -101,12 +120,12 @@ export const StudentDashboard: React.FC = () => {
               Student Dashboard
             </span>
             <span className="text-xs text-indigo-100">
-              {user?.department} • Year of {user?.graduationYear}
+              {user?.department || 'Campus Department'} • Year of {user?.graduationYear || 2026}
             </span>
           </div>
 
           <h1 className="mt-3 text-2xl sm:text-4xl font-extrabold tracking-tight">
-            Welcome back, {user?.name?.split(' ')[0]}! 🎓
+            Welcome back, {user?.name ? user.name.split(' ')[0] : 'Student'}! 🎓
           </h1>
 
           <p className="mt-2 text-xs sm:text-sm text-indigo-100 leading-relaxed">
@@ -170,7 +189,7 @@ export const StudentDashboard: React.FC = () => {
                 Curated AI Recommendations
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ranked using your academic interests ({user?.interests?.join(', ') || 'General'})
+                Ranked using your academic interests ({Array.isArray(user?.interests) && user.interests.length > 0 ? user.interests.join(', ') : 'General'})
               </p>
             </div>
           </div>
@@ -203,14 +222,18 @@ export const StudentDashboard: React.FC = () => {
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {aiRecommendations.slice(0, 4).map((rec) => (
-              <EventCard
-                key={rec.event._id}
-                event={rec.event}
-                matchScore={rec.matchPercentage}
-                recommendationReason={rec.recommendationReason}
-              />
-            ))}
+            {aiRecommendations.slice(0, 4).map((rec, idx) => {
+              const eventObj = rec?.event || rec;
+              if (!eventObj || (!eventObj._id && !eventObj.id)) return null;
+              return (
+                <EventCard
+                  key={eventObj._id || eventObj.id || idx}
+                  event={eventObj}
+                  matchScore={rec.matchPercentage || rec.recommendationScore}
+                  recommendationReason={rec.recommendationReason}
+                />
+              );
+            })}
           </div>
         )}
       </section>

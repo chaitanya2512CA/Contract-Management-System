@@ -246,6 +246,27 @@ export const createEvent = async (req, res) => {
       });
     }
 
+    if (title.trim().length < 3 || title.trim().length > 150) {
+      return res.status(400).json({
+        success: false,
+        message: 'Event title must be between 3 and 150 characters long.',
+      });
+    }
+
+    if (description.trim().length > 2000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Event description cannot exceed 2,000 characters.',
+      });
+    }
+
+    if (venue.trim().length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'Venue location cannot exceed 200 characters.',
+      });
+    }
+
     const creatorId = req.user.id || req.user._id;
     const isSuperAdmin = req.user.role === 'admin';
     // Admin events are automatically approved; Student/Organizer events enter moderation

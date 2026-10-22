@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
   ticket_code VARCHAR(50) UNIQUE NOT NULL,
   status VARCHAR(25) NOT NULL CHECK (status IN ('confirmed', 'waitlisted', 'attended', 'cancelled')) DEFAULT 'confirmed',
+  attendance_status VARCHAR(20) DEFAULT 'unmarked',
   registration_date TIMESTAMPTZ DEFAULT NOW(),
   qr_code_data TEXT DEFAULT '',
   team_id VARCHAR(36) DEFAULT NULL,
@@ -139,6 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_registrations_user ON event_registrations(user_id
 CREATE INDEX IF NOT EXISTS idx_registrations_event ON event_registrations(event_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_ticket ON event_registrations(ticket_code);
 CREATE INDEX IF NOT EXISTS idx_attendance_event ON attendances(event_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_student ON certificates(student_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_code ON certificates(certificate_code);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);

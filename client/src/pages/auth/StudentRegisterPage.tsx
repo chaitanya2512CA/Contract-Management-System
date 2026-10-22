@@ -67,6 +67,24 @@ export const StudentRegisterPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (name.trim().length < 2 || name.trim().length > 100) {
+      setErrorMessage('Full name must be between 2 and 100 characters.');
+      return;
+    }
+    if (email.trim().length > 254) {
+      setErrorMessage('Email address cannot exceed 254 characters.');
+      return;
+    }
+    if (password.length < 12 || password.length > 128) {
+      setErrorMessage('Password must be between 12 and 128 characters for security.');
+      return;
+    }
+    if (studentId.trim().length > 50) {
+      setErrorMessage('Student ID cannot exceed 50 characters.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -127,6 +145,7 @@ export const StudentRegisterPage: React.FC = () => {
                   <input
                     type="text"
                     required
+                    maxLength={100}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Alex Rivera"
@@ -142,6 +161,7 @@ export const StudentRegisterPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  maxLength={50}
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
                   placeholder="CS-2024-0042"
@@ -160,6 +180,7 @@ export const StudentRegisterPage: React.FC = () => {
                   <input
                     type="email"
                     required
+                    maxLength={254}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="alex@college.edu"
@@ -170,17 +191,18 @@ export const StudentRegisterPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Password
+                  Password (min 12 chars)
                 </label>
                 <div className="mt-1.5 relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={12}
+                    maxLength={128}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 12 characters"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
                   />
                 </div>

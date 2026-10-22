@@ -76,6 +76,14 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <Link to="/admin/events">
+            <Button
+              variant="outline"
+              leftIcon={<Calendar className="h-4 w-4 text-indigo-500" />}
+            >
+              All Events & Attendance
+            </Button>
+          </Link>
           <Link to="/admin/approvals">
             <Button
               variant="outline"

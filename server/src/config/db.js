@@ -79,6 +79,15 @@ export const initSchema = async () => {
     if (fs.existsSync(schemaPath)) {
       const sql = fs.readFileSync(schemaPath, 'utf8');
       await activePool.query(sql);
+
+      // Safe progressive migrations for existing Neon database instances
+      try {
+        await activePool.query(`ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`);
+      } catch (_) {}
+      try {
+        await activePool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`);
+      } catch (_) {}
+
       console.log('[DB] Neon PostgreSQL schema verified & initialized successfully.');
       isSchemaInitialized = true;
       isReady = true;
@@ -242,6 +251,7 @@ export const mapRegistration = (row) => {
     } : row.user_id,
     ticketCode: row.ticket_code,
     status: row.status,
+    attendanceStatus: row.attendance_status || (row.status === 'attended' ? 'present' : 'unmarked'),
     registrationDate: row.registration_date,
     qrCodeData: row.qr_code_data,
     teamId: row.team_id,

@@ -39,6 +39,7 @@ import { OrganizerAnnouncementsPage } from './pages/organizer/OrganizerAnnouncem
 
 // Admin Pages
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { AdminEventsPage } from './pages/admin/AdminEventsPage';
 import { AdminEventApprovalsPage } from './pages/admin/AdminEventApprovalsPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
@@ -106,6 +107,7 @@ export const App: React.FC = () => {
         }
       >
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/events" element={<AdminEventsPage />} />
         <Route path="/admin/approvals" element={<AdminEventApprovalsPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />

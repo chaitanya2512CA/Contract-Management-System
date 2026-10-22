@@ -1,4 +1,4 @@
-﻿import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, mapUser } from '../config/db.js';
@@ -37,6 +37,34 @@ export const registerStudent = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Name, email, and password are required.',
+      });
+    }
+
+    if (name.trim().length < 2 || name.trim().length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full name must be between 2 and 100 characters long.',
+      });
+    }
+
+    if (email.trim().length > 254) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email cannot exceed 254 characters.',
+      });
+    }
+
+    if (password.length < 12 || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be between 12 and 128 characters for security compliance.',
+      });
+    }
+
+    if (studentId && studentId.trim().length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student ID cannot exceed 50 characters.',
       });
     }
 
@@ -97,6 +125,27 @@ export const registerOrganizer = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Name, email, password, and organization name are required.',
+      });
+    }
+
+    if (name.trim().length < 2 || name.trim().length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full name must be between 2 and 100 characters long.',
+      });
+    }
+
+    if (email.trim().length > 254) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email cannot exceed 254 characters.',
+      });
+    }
+
+    if (password.length < 12 || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be between 12 and 128 characters for security compliance.',
       });
     }
 

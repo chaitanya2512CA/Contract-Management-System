@@ -42,12 +42,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(res.data.user);
             localStorage.setItem('campuspulse_user', JSON.stringify(res.data.user));
           }
-        } catch (err) {
-          console.warn('Session verification failed, clearing credentials.');
-          localStorage.removeItem('campuspulse_token');
-          localStorage.removeItem('campuspulse_user');
-          setUser(null);
-          setToken(null);
+        } catch (err: any) {
+          if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+            console.warn('Session verification failed with 401/403, clearing credentials.');
+            localStorage.removeItem('campuspulse_token');
+            localStorage.removeItem('campuspulse_user');
+            setUser(null);
+            setToken(null);
+          } else {
+            console.warn('Network or server error during session verification, keeping cached session active.', err);
+          }
         }
       }
       setIsLoading(false);

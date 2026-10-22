@@ -29,10 +29,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Not authenticated: redirect to appropriate login portal
   if (!isAuthenticated || !user) {
-    if (allowedRoles?.includes('admin')) {
+    if (allowedRoles && allowedRoles.length === 1 && allowedRoles[0] === 'admin') {
       return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
-    if (allowedRoles?.includes('organizer') && !allowedRoles?.includes('student')) {
+    if (allowedRoles && allowedRoles.includes('organizer') && !allowedRoles.includes('student')) {
       return <Navigate to="/organizer/login" state={{ from: location }} replace />;
     }
     return <Navigate to="/student/login" state={{ from: location }} replace />;

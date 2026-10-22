@@ -41,6 +41,7 @@ export const Sidebar: React.FC<{ onCloseMobile?: () => void }> = ({ onCloseMobil
 
   const adminLinks = [
     { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+    { to: '/admin/events', label: 'Event Management', icon: Calendar },
     { to: '/admin/approvals', label: 'Event Moderation', icon: CheckCircle },
     { to: '/admin/users', label: 'User & Role Access', icon: Users },
     { to: '/admin/analytics', label: 'Campus Analytics', icon: BarChart3 },
