@@ -1220,4 +1220,110 @@ export const exportAttendanceCSV = async (req, res) => {
   }
 };
 
+/**
+ * ContractIQ Platform Executive Metrics & KPIs
+ */
+export const getPlatformMetrics = async (req, res) => {
+  try {
+    const clientsCount = await query("SELECT count(*) FROM users WHERE role = 'client'");
+    const businessCount = await query("SELECT count(*) FROM users WHERE role = 'business'");
+    const totalLawyers = await query("SELECT count(*) FROM lawyer_profiles");
+    const verifiedLawyers = await query("SELECT count(*) FROM lawyer_profiles WHERE is_verified = true");
+    const pendingVerifications = await query("SELECT count(*) FROM lawyer_verifications WHERE status = 'pending'");
+    const totalConsultations = await query("SELECT count(*) FROM consultation_bookings");
+    const completedConsultations = await query("SELECT count(*) FROM consultation_bookings WHERE status = 'completed'");
+    const totalContracts = await query("SELECT count(*) FROM contracts");
+    const totalCases = await query("SELECT count(*) FROM legal_cases");
+    const financialSummary = await query(`
+      SELECT
+        COALESCE(SUM(amount_paise) / 100.0, 0) as total_volume,
+        COUNT(*) as transaction_count
+      FROM payment_transactions WHERE status = 'success'
+    `);
+    const commissionSummary = await query(`
+      SELECT COALESCE(SUM(platform_fee), 0) as total_commission FROM commission_ledgers
+    `);
+    const payoutSummary = await query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN requested_amount ELSE 0 END), 0) as paid_payouts,
+        COALESCE(SUM(CASE WHEN status = 'requested' THEN requested_amount ELSE 0 END), 0) as pending_payouts
+      FROM payouts
+    `);
+
+    res.status(200).json({
+      success: true,
+      metrics: {
+        totalClients: parseInt(clientsCount.rows[0].count, 10),
+        totalBusinesses: parseInt(businessCount.rows[0].count, 10),
+        totalLawyers: parseInt(totalLawyers.rows[0].count, 10),
+        verifiedLawyers: parseInt(verifiedLawyers.rows[0].count, 10),
+        pendingVerifications: parseInt(pendingVerifications.rows[0].count, 10),
+        totalConsultations: parseInt(totalConsultations.rows[0].count, 10),
+        completedConsultations: parseInt(completedConsultations.rows[0].count, 10),
+        totalContracts: parseInt(totalContracts.rows[0].count, 10),
+        totalCases: parseInt(totalCases.rows[0].count, 10),
+        grossVolumeINR: parseFloat(financialSummary.rows[0].total_volume),
+        platformCommissionsINR: parseFloat(commissionSummary.rows[0].total_commission),
+        paidPayoutsINR: parseFloat(payoutSummary.rows[0].paid_payouts),
+        pendingPayoutsINR: parseFloat(payoutSummary.rows[0].pending_payouts),
+      },
+    });
+  } catch (error) {
+    console.error('Error in getPlatformMetrics:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve platform metrics.' });
+  }
+};
+
+/**
+ * Get Platform Commission Settings
+ */
+export const getPlatformSettings = async (req, res) => {
+  try {
+    const sRes = await query("SELECT * FROM platform_settings WHERE key = 'commission_policy'");
+    res.status(200).json({
+      success: true,
+      policy: sRes.rows[0]?.value || { default_rate_percent: 15.0, min_payout_inr: 1000 },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to retrieve settings.' });
+  }
+};
+
+/**
+ * Update Platform Commission Settings
+ */
+export const updatePlatformSettings = async (req, res) => {
+  try {
+    const { defaultRatePercent, minPayoutInr } = req.body;
+    const adminId = req.user.id || req.user._id;
+
+    const val = {
+      default_rate_percent: parseFloat(defaultRatePercent) || 15.0,
+      min_payout_inr: parseFloat(minPayoutInr) || 1000,
+    };
+
+    await query(
+      `INSERT INTO platform_settings (key, value, description, updated_at)
+       VALUES ('commission_policy', $1, 'Platform commission and settlement policy', NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(val)]
+    );
+
+    // Audit log
+    await query(
+      `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details)
+       VALUES ($1, $2, $3, 'SETTINGS_UPDATED', 'PLATFORM_SETTINGS', 'commission_policy', $4)`,
+      [crypto.randomUUID(), adminId, req.user.email, `Updated commission rate to ${val.default_rate_percent}%`]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Platform settings updated successfully.',
+      policy: val,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to update settings.' });
+  }
+};
+
 

@@ -17,6 +17,9 @@ import {
   getEventAttendance,
   updateAttendanceStatus,
   exportAttendanceCSV,
+  getPlatformMetrics,
+  getPlatformSettings,
+  updatePlatformSettings,
 } from '../controllers/adminController.js';
 import { protect, requireRole } from '../middleware/auth.js';
 
@@ -26,7 +29,12 @@ const router = express.Router();
 router.use(protect);
 router.use(requireRole('admin'));
 
-// Stats & Analytics
+// ContractIQ Platform Metrics & Settings
+router.get('/metrics', getPlatformMetrics);
+router.get('/settings/commission', getPlatformSettings);
+router.put('/settings/commission', updatePlatformSettings);
+
+// Stats & Analytics (Legacy)
 router.get('/stats', getAdminStats);
 
 // Comprehensive Event Management (Admin CRUD & Lifecycle)

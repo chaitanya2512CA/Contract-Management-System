@@ -7,14 +7,34 @@ import { StudentLayout } from './components/layout/StudentLayout';
 import { OrganizerLayout } from './components/layout/OrganizerLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 
-// Public Pages
+// Public Pages (ContractIQ)
 import { LandingPage } from './pages/public/LandingPage';
+import { LawyerDirectoryPage } from './pages/marketplace/LawyerDirectoryPage';
+import { LegalServicesPage } from './pages/marketplace/LegalServicesPage';
+
+// ContractIQ Auth Pages
+import { UniversalLoginPage } from './pages/auth/UniversalLoginPage';
+import { UniversalRegisterPage } from './pages/auth/UniversalRegisterPage';
+
+// ContractIQ Dashboards & Workspaces
+import { ClientDashboard } from './pages/client/ClientDashboard';
+import { LawyerDashboard } from './pages/lawyer/LawyerDashboard';
+import { LawyerProfilePage } from './pages/lawyer/LawyerProfilePage';
+import { BusinessDashboard } from './pages/business/BusinessDashboard';
+import { ContractIQAdminDashboard } from './pages/admin/ContractIQAdminDashboard';
+
+// ContractIQ CLM, Cases & Consultations
+import { ContractDetailsPage } from './pages/contracts/ContractDetailsPage';
+import { CasesListPage } from './pages/cases/CasesListPage';
+import { CaseDetailsPage } from './pages/cases/CaseDetailsPage';
+import { ConsultationRoomPage } from './pages/consultation/ConsultationRoomPage';
+
+// Legacy Event Management Pages (Preserved for compatibility)
 import { ExploreEventsPage } from './pages/public/ExploreEventsPage';
 import { EventDetailsPage } from './pages/public/EventDetailsPage';
 import { VerifyCertificatePage } from './pages/public/VerifyCertificatePage';
 import { NotFoundPage } from './pages/public/NotFoundPage';
 
-// Auth Pages
 import { StudentLoginPage } from './pages/auth/StudentLoginPage';
 import { StudentRegisterPage } from './pages/auth/StudentRegisterPage';
 import { OrganizerLoginPage } from './pages/auth/OrganizerLoginPage';
@@ -22,14 +42,12 @@ import { OrganizerRegisterPage } from './pages/auth/OrganizerRegisterPage';
 import { AdminLoginPage } from './pages/auth/AdminLoginPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 
-// Student Pages
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { MyRegistrationsPage } from './pages/student/MyRegistrationsPage';
 import { StudentCalendarPage } from './pages/student/StudentCalendarPage';
 import { MyCertificatesPage } from './pages/student/MyCertificatesPage';
 import { StudentProfilePage } from './pages/student/StudentProfilePage';
 
-// Organizer Pages
 import { OrganizerDashboard } from './pages/organizer/OrganizerDashboard';
 import { CreateEventPage } from './pages/organizer/CreateEventPage';
 import { EditEventPage } from './pages/organizer/EditEventPage';
@@ -37,7 +55,6 @@ import { ManageEventRegistrationsPage } from './pages/organizer/ManageEventRegis
 import { QRScanAttendancePage } from './pages/organizer/QRScanAttendancePage';
 import { OrganizerAnnouncementsPage } from './pages/organizer/OrganizerAnnouncementsPage';
 
-// Admin Pages
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminEventsPage } from './pages/admin/AdminEventsPage';
 import { AdminEventApprovalsPage } from './pages/admin/AdminEventApprovalsPage';
@@ -48,27 +65,123 @@ import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
 export const App: React.FC = () => {
   return (
     <Routes>
-      {/* Public Pages */}
+      {/* ContractIQ Public & Marketplace Pages */}
       <Route path="/" element={<LandingPage />} />
+      <Route path="/lawyers" element={<LawyerDirectoryPage />} />
+      <Route path="/services" element={<LegalServicesPage />} />
+
+      {/* ContractIQ Authentication */}
+      <Route path="/login" element={<UniversalLoginPage />} />
+      <Route path="/register" element={<UniversalRegisterPage />} />
+
+      {/* ContractIQ Client Portal */}
+      <Route
+        path="/client/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['client', 'admin']}>
+            <ClientDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ContractIQ Lawyer Portal */}
+      <Route
+        path="/lawyer/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'admin']}>
+            <LawyerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/lawyer/profile"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'admin']}>
+            <LawyerProfilePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ContractIQ Business & CLM Portal */}
+      <Route
+        path="/business/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['business', 'admin', 'lawyer', 'client']}>
+            <BusinessDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contracts"
+        element={
+          <ProtectedRoute allowedRoles={['business', 'admin', 'lawyer', 'client']}>
+            <BusinessDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contracts/:id"
+        element={
+          <ProtectedRoute allowedRoles={['business', 'admin', 'lawyer', 'client']}>
+            <ContractDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ContractIQ Legal Cases */}
+      <Route
+        path="/cases"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'client', 'business', 'admin']}>
+            <CasesListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cases/:id"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'client', 'business', 'admin']}>
+            <CaseDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ContractIQ Real-time Consultation Room */}
+      <Route
+        path="/consultations/:id/room"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'client', 'business', 'admin']}>
+            <ConsultationRoomPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ContractIQ Admin Portal */}
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <ContractIQAdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Legacy Event Pages */}
       <Route path="/events" element={<ExploreEventsPage />} />
       <Route path="/events/:id" element={<EventDetailsPage />} />
       <Route path="/calendar" element={<StudentCalendarPage />} />
       <Route path="/verify-certificate" element={<VerifyCertificatePage />} />
       <Route path="/verify/:code" element={<VerifyCertificatePage />} />
 
-      {/* Authentication Portals */}
+      {/* Legacy Auth Portals */}
       <Route path="/student/login" element={<StudentLoginPage />} />
-      <Route path="/login" element={<StudentLoginPage />} />
       <Route path="/student/register" element={<StudentRegisterPage />} />
-
       <Route path="/organizer/login" element={<OrganizerLoginPage />} />
       <Route path="/organizer/register" element={<OrganizerRegisterPage />} />
-
-      {/* Dedicated Administrator Portal */}
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-      {/* Student Protected Portal */}
+      {/* Legacy Student Protected Portal */}
       <Route
         element={
           <ProtectedRoute allowedRoles={['student', 'organizer', 'admin']}>
@@ -82,7 +195,7 @@ export const App: React.FC = () => {
         <Route path="/profile" element={<StudentProfilePage />} />
       </Route>
 
-      {/* Organizer Protected Portal */}
+      {/* Legacy Organizer Protected Portal */}
       <Route
         element={
           <ProtectedRoute allowedRoles={['organizer', 'admin']}>
@@ -98,7 +211,7 @@ export const App: React.FC = () => {
         <Route path="/organizer/announcements" element={<OrganizerAnnouncementsPage />} />
       </Route>
 
-      {/* Administrator Protected Portal */}
+      {/* Legacy Admin Protected Portal Sub-pages */}
       <Route
         element={
           <ProtectedRoute allowedRoles={['admin']}>
@@ -106,7 +219,7 @@ export const App: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/legacy-dashboard" element={<AdminDashboard />} />
         <Route path="/admin/events" element={<AdminEventsPage />} />
         <Route path="/admin/approvals" element={<AdminEventApprovalsPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
@@ -119,3 +232,4 @@ export const App: React.FC = () => {
     </Routes>
   );
 };
+export default App;

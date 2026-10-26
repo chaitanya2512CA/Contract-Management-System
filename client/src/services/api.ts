@@ -41,6 +41,11 @@ api.interceptors.response.use(
 
 /* ================= AUTH API ================= */
 export const authService = {
+  login: (credentials: { email: string; password: string }) =>
+    api.post('/auth/login', credentials),
+
+  register: (data: any) => api.post('/auth/register', data),
+
   loginStudent: (credentials: { email: string; password: string }) =>
     api.post('/auth/student/login', credentials),
 
@@ -61,6 +66,86 @@ export const authService = {
   changePassword: (data: any) => api.put('/auth/change-password', data),
 
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+};
+
+/* ================= CONTRACTIQ LAWYER API ================= */
+export const lawyerService = {
+  getLawyers: (params?: any) => api.get('/lawyers', { params }),
+  getLawyerById: (id: string) => api.get(`/lawyers/${id}`),
+  updateProfile: (data: any) => api.put('/lawyers/me/profile', data),
+  updateAvailability: (data: any) => api.put('/lawyers/me/availability', data),
+};
+
+/* ================= VERIFICATION API ================= */
+export const verificationService = {
+  submit: (data: any) => api.post('/lawyer-verification', data),
+  getStatus: () => api.get('/lawyer-verification/status'),
+  getQueue: () => api.get('/lawyer-verification/queue'),
+  review: (id: string, data: { status: string; adminNotes?: string }) =>
+    api.put(`/lawyer-verification/${id}/review`, data),
+};
+
+/* ================= CONSULTATION API ================= */
+export const consultationService = {
+  create: (data: any) => api.post('/consultations', data),
+  getAll: (params?: any) => api.get('/consultations', { params }),
+  getById: (id: string) => api.get(`/consultations/${id}`),
+  accept: (id: string) => api.put(`/consultations/${id}/accept`),
+  reject: (id: string, reason?: string) => api.put(`/consultations/${id}/reject`, { rejectionReason: reason }),
+  joinRoom: (id: string) => api.get(`/consultations/${id}/room`),
+  complete: (id: string, notes?: string) => api.put(`/consultations/${id}/complete`, { notes }),
+  getMessages: (bookingId: string) => api.get(`/consultations/${bookingId}/messages`),
+  sendMessage: (bookingId: string, data: any) => api.post(`/consultations/${bookingId}/messages`, data),
+};
+
+/* ================= CLM CONTRACTS API ================= */
+export const contractService = {
+  getAll: (params?: any) => api.get('/contracts', { params }),
+  getById: (id: string) => api.get(`/contracts/${id}`),
+  create: (data: any) => api.post('/contracts', data),
+  analyze: (id: string) => api.post(`/contracts/${id}/analyze`),
+  chat: (id: string, question: string) => api.post(`/contracts/${id}/chat`, { question }),
+  share: (id: string, data: any) => api.post(`/contracts/${id}/share`, data),
+  revokeShare: (id: string, permId: string) => api.delete(`/contracts/${id}/share/${permId}`),
+  sign: (id: string, data: any) => api.post(`/contracts/${id}/sign`, data),
+};
+
+/* ================= LEGAL CASES API ================= */
+export const caseService = {
+  getAll: (params?: any) => api.get('/cases', { params }),
+  getById: (id: string) => api.get(`/cases/${id}`),
+  create: (data: any) => api.post('/cases', data),
+  update: (id: string, data: any) => api.put(`/cases/${id}`, data),
+  addDocument: (id: string, data: any) => api.post(`/cases/${id}/documents`, data),
+};
+
+/* ================= LEGAL SERVICES MARKETPLACE ================= */
+export const legalServicesService = {
+  getAll: (params?: any) => api.get('/services', { params }),
+  create: (data: any) => api.post('/services', data),
+  request: (id: string, data: any) => api.post(`/services/${id}/request`, data),
+  getRequests: () => api.get('/services/requests/all'),
+};
+
+/* ================= PAYMENTS & RAZORPAY API ================= */
+export const paymentService = {
+  createOrder: (data: any) => api.post('/payments/orders', data),
+  verify: (data: any) => api.post('/payments/verify', data),
+  testCheckout: (bookingId: string) => api.post('/payments/test-checkout', { bookingId }),
+};
+
+/* ================= FINANCIALS & PAYOUTS API ================= */
+export const financialService = {
+  getEarnings: () => api.get('/financials/earnings'),
+  requestPayout: (amount: number) => api.post('/financials/payouts', { amount }),
+  getAdminPayouts: () => api.get('/financials/admin/payouts'),
+  processPayout: (id: string, data: any) => api.put(`/financials/admin/payouts/${id}`, data),
+};
+
+/* ================= CLIENT REVIEWS API ================= */
+export const reviewService = {
+  submit: (data: any) => api.post('/reviews', data),
+  getByLawyer: (lawyerId: string) => api.get(`/reviews/lawyer/${lawyerId}`),
 };
 
 /* ================= EVENT API ================= */
@@ -127,6 +212,11 @@ export const certificateService = {
 
 /* ================= ADMIN API ================= */
 export const adminService = {
+  getPlatformMetrics: () => api.get('/admin/metrics'),
+  getCommissionSettings: () => api.get('/admin/settings/commission'),
+  updateCommissionSettings: (data: { defaultRatePercent: number; minPayoutInr?: number }) =>
+    api.put('/admin/settings/commission', data),
+
   getStats: () => api.get('/admin/stats'),
 
   // Event Management (CRUD & Lifecycle)

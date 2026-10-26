@@ -223,7 +223,17 @@ export const initSchema = async () => {
       `ALTER TABLE events ADD CONSTRAINT chk_events_venue_len CHECK (length(venue) <= 200);`,
       `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 200);`,
       `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_msg_len CHECK (length(message) <= 2000);`,
-      `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`
+      `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`,
+      // Safe targeted cleanup of legacy sample / seed events from Neon PostgreSQL
+      `DELETE FROM events WHERE title IN (
+        'AI Horizon 2026: 36-Hour National Hackathon',
+        'Mastering Cloud-Native Microservices with Kubernetes',
+        'CyberDefend 2026: Campus Capture The Flag (CTF)',
+        'RoboWars 2026: Autonomous Combat Arena & Drone Racing',
+        'Tarang 2026: Annual University Cultural & Musical Odyssey'
+      ) AND organizer_email = 'organizer@college.edu';`,
+      `DELETE FROM announcements WHERE title = 'Hacker Guide & API Keys Released';`,
+      `DELETE FROM audit_logs WHERE details = 'Approved event: AI Horizon 2026';`
     ];
 
     for (const statement of migrations) {
@@ -328,6 +338,9 @@ export const mapUser = (row) => {
     name: row.name,
     email: row.email,
     role: row.role,
+    companyName: row.company_name || '',
+    city: row.city || '',
+    state: row.state || '',
     studentId: row.student_id || '',
     employeeId: row.employee_id || '',
     adminId: row.admin_id || '',
@@ -337,7 +350,7 @@ export const mapUser = (row) => {
     avatar: row.avatar || '',
     bio: row.bio || '',
     interests: Array.isArray(row.interests) ? row.interests : (typeof row.interests === 'string' ? JSON.parse(row.interests) : []),
-    organizationName: row.organization_name || '',
+    organizationName: row.company_name || row.organization_name || '',
     isActive: row.is_active !== false,
     lastLogin: row.last_login,
     createdAt: row.created_at,

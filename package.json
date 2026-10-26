@@ -23,8 +23,11 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
+    "multer": "^2.5.0",
     "pg": "^8.23.1",
     "pg-mem": "^3.0.14",
+    "qrcode": "^1.5.4",
+    "json2csv": "^6.0.0-alpha.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {

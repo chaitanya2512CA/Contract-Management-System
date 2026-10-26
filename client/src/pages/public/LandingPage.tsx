@@ -1,262 +1,315 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
+  Scale,
   Sparkles,
-  Calendar,
-  Award,
-  Users,
-  QrCode,
   ShieldCheck,
-  ArrowRight,
-  TrendingUp,
-  Clock,
-  Compass,
-  CheckCircle2,
+  Video,
+  FileText,
+  Users,
   ChevronRight,
   Star,
+  Lock,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
+  Briefcase,
+  Building,
 } from 'lucide-react';
-import { eventService } from '../../services/api';
-import { CollegeEvent } from '../../types';
-import { EventCard } from '../../components/events/EventCard';
-import { EventCardSkeleton } from '../../components/common/LoadingSkeleton';
 import { Navbar } from '../../components/layout/Navbar';
 import { Footer } from '../../components/layout/Footer';
+import { lawyerService } from '../../services/api';
+import { LawyerProfile } from '../../types';
+import { BookingModal } from '../../components/consultation/BookingModal';
+
+const SPECIALTIES = [
+  { name: 'Criminal Lawyer', icon: '🚨', desc: 'Bail, FIR defense, criminal appeals, economic offences' },
+  { name: 'Corporate and Commercial Lawyer', icon: '🏢', desc: 'M&A, startup investments, shareholder agreements, VC rounds' },
+  { name: 'Contract Lawyer', icon: '📜', desc: 'SaaS agreements, SLA redlining, NDA drafting, commercial deeds' },
+  { name: 'Family and Divorce Lawyer', icon: '👨‍👩‍👧', desc: 'Mutual divorce, child custody, maintenance, mediation' },
+  { name: 'Property and Real Estate Lawyer', icon: '🏠', desc: '30-year title searches, RERA disputes, sale deed drafting' },
+  { name: 'Cybercrime and Technology Lawyer', icon: '💻', desc: 'DPDP compliance, IT Act 66A/66D, cyber financial fraud' },
+  { name: 'Tax and GST Lawyer', icon: '💰', desc: 'GST scrutiny, ITAT appeals, transfer pricing & notice replies' },
+  { name: 'Intellectual Property Lawyer', icon: '💡', desc: 'Trademark registration, copyright opposition, patent filing' },
+];
 
 export const LandingPage: React.FC = () => {
-  const [trendingEvents, setTrendingEvents] = useState<CollegeEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+  const [topLawyers, setTopLawyers] = useState<LawyerProfile[]>([]);
+  const [selectedLawyer, setSelectedLawyer] = useState<LawyerProfile | null>(null);
 
   useEffect(() => {
-    const fetchTrending = async () => {
+    const loadFeaturedLawyers = async () => {
       try {
-        const res = await eventService.getTrendingEvents();
+        const res = await lawyerService.getLawyers({ limit: 4 });
         if (res.data.success) {
-          setTrendingEvents(res.data.events || []);
+          setTopLawyers(res.data.lawyers);
         }
       } catch (err) {
-        console.error('Failed to load trending events', err);
-      } finally {
-        setIsLoading(false);
+        console.error('Error fetching featured advocates:', err);
       }
     };
-
-    fetchTrending();
+    loadFeaturedLawyers();
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
       <Navbar />
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative overflow-hidden py-16 sm:py-24 border-b border-slate-200/80 dark:border-slate-800 bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-950 dark:to-slate-950">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+        <section className="relative overflow-hidden border-b border-slate-200 bg-white py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900">
+          <div className="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
 
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-            {/* Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50/80 px-3.5 py-1 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900/60 dark:bg-indigo-950/60 dark:text-indigo-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>CampusPulse Event Operating System 2026</span>
+          <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            {/* Tagline Pill */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-xs font-bold text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300">
+              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span>India's Premier AI Legal Operating System & Advocate Marketplace</span>
             </div>
 
-            {/* Headline */}
-            <h1 className="mt-6 text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white max-w-4xl mx-auto leading-tight">
-              Where Campus Innovation, Tech & Culture{' '}
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Come Alive.
-              </span>
+            {/* Main Headline */}
+            <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-900 sm:text-6xl dark:text-white">
+              AI-Powered Contract Intelligence & <br />
+              <span className="text-blue-700 dark:text-blue-500">Instant Advocate Consultations</span>
             </h1>
 
-            <p className="mt-5 text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              The centralized college event management system. Discover upcoming national hackathons, technical workshops, and university fests with one-click registrations and instant QR entry passes.
+            {/* Sub-headline */}
+            <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">
+              The complete legal ecosystem. Review and negotiate agreements with instant AI risk scoring (0–100), red-flag
+              detection, and e-signatures. Connect with verified Bar Council advocates through encrypted video, audio, or
+              chat consultations.
             </p>
 
-            {/* CTAs */}
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {/* CTA Buttons */}
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link
-                to="/events"
-                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-700 hover:shadow-indigo-600/40"
+                to="/lawyers"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-700 px-7 py-4 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 dark:shadow-none"
               >
-                <Compass className="h-4 w-4" />
-                <span>Explore Campus Events</span>
-                <ArrowRight className="h-4 w-4" />
+                <Users className="h-4 w-4" />
+                <span>Consult an Advocate (From ₹499)</span>
               </Link>
+
               <Link
-                to="/student/register"
-                className="rounded-xl border border-slate-300 bg-white px-6 py-3.5 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+                to="/contracts"
+                className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               >
-                Join as Student
+                <FileText className="h-4 w-4 text-emerald-600" />
+                <span>AI Contract Lifecycle Hub</span>
               </Link>
             </div>
 
-            {/* Stats Counter */}
-            <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-slate-200/80 pt-8 dark:border-slate-800">
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">5,000+</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Active Students</p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">120+</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Annual Events</p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-purple-600 dark:text-purple-400">100%</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">QR Attendance Verified</p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">3,400+</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Certificates Issued</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Featured / Trending Events Section */}
-        <section className="py-16 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-indigo-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                  Campus Buzz
-                </span>
-              </div>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-                Featured & Trending Activities
-              </h2>
-            </div>
-
-            <Link
-              to="/events"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400"
-            >
-              <span>View All Events</span>
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <EventCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : trendingEvents.length === 0 ? (
-            <p className="text-center text-xs text-slate-400 py-8">
-              No active approved events right now.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {trendingEvents.slice(0, 3).map((event) => (
-                <EventCard key={event._id} event={event} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Core Architectural Pillars */}
-        <section className="py-16 bg-slate-100/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-800">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-2xl mx-auto">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                Institutional Infrastructure
+            {/* Trust Badges */}
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Bar Council Verified Advocates
               </span>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl font-serif">
-                Built for High Performance Campus Living
-              </h2>
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                A seamless stack engineered for students, club faculty advisors, and university administrators.
-              </p>
-            </div>
-
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
-                  AI Recommendation Algorithm
-                </h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Matches student interest tags, degree focus, and historical attendances to rank upcoming events with personalized match scores.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
-                  <QrCode className="h-6 w-6" />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
-                  Digital Pass & QR Gate Check-in
-                </h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Every attendee receives a cryptographic digital pass. Organizers verify attendance in seconds using smartphone cameras or ticket code entry.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
-                  <ShieldCheck className="h-6 w-6" />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
-                  Verifiable Credentials & PDF Certificates
-                </h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Automated certificate issuance tied strictly to verified attendance. Third-party employers can authenticate codes directly at /verify/:code.
-                </p>
-              </div>
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Lock className="h-4 w-4 text-blue-600" />
+                Client-Attorney Privilege Encrypted
+              </span>
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Sparkles className="h-4 w-4 text-purple-600" />
+                Rule-Based AI Contract Extraction
+              </span>
             </div>
           </div>
         </section>
 
-        {/* Roles Highlight */}
-        <section className="py-16 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-3xl bg-slate-900 p-8 sm:p-12 text-white relative overflow-hidden border border-slate-800">
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="space-y-3">
-                <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-[11px] font-bold text-indigo-300">
-                  Student Persona
+        {/* Practice Areas / Categories Grid */}
+        <section className="py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                  Legal Practice Categories
                 </span>
-                <h3 className="text-xl font-bold">Discover & Register</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Filter campus activities, form hackathon teams, get schedule conflict alerts, and download earned certificates.
-                </p>
-                <Link to="/student/login" className="inline-block text-xs font-bold text-indigo-400 hover:underline">
-                  Student Portal →
-                </Link>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+                  Find Specialists for Your Legal Problem
+                </h2>
               </div>
-
-              <div className="space-y-3">
-                <span className="rounded-full bg-purple-500/20 px-3 py-1 text-[11px] font-bold text-purple-300">
-                  Organizer Persona
-                </span>
-                <h3 className="text-xl font-bold">Publish & Manage</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Create event proposals, scan attendee QR codes, export CSV participant rosters, and issue batch certificates.
-                </p>
-                <Link to="/organizer/login" className="inline-block text-xs font-bold text-purple-400 hover:underline">
-                  Organizer Studio →
-                </Link>
-              </div>
-
-              <div className="space-y-3">
-                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-bold text-emerald-300">
-                  Administrator Persona
-                </span>
-                <h3 className="text-xl font-bold">Moderate & Govern</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Dedicated secure portal, event approval queue with feedback, role control, audit trail logging, and campus analytics.
-                </p>
-                <Link to="/admin/login" className="inline-block text-xs font-bold text-emerald-400 hover:underline">
-                  Administration Portal →
-                </Link>
-              </div>
+              <Link to="/lawyers" className="flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline">
+                <span>View all 15 specialties</span>
+                <ChevronRight className="h-4 w-4" />
+              </Link>
             </div>
+
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {SPECIALTIES.map((spec) => (
+                <div
+                  key={spec.name}
+                  onClick={() => navigate(`/lawyers?specialty=${encodeURIComponent(spec.name)}`)}
+                  className="cursor-pointer group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+                >
+                  <div>
+                    <span className="text-3xl">{spec.icon}</span>
+                    <h3 className="mt-3 text-sm font-bold text-slate-900 group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-400 transition">
+                      {spec.name}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500 line-clamp-2">{spec.desc}</p>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                    <span>Find Advocates</span>
+                    <ChevronRight className="h-3 w-3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* How It Works (Astrotalk-style smooth flow) */}
+        <section className="border-y border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-900">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+              Seamless 4-Step Journey
+            </span>
+            <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+              Consulting an Advocate is Frictionless on ContractIQ
+            </h2>
+
+            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 text-left">
+              {[
+                {
+                  step: '01',
+                  title: 'Select Practice Specialty',
+                  desc: 'Search advocates by Criminal, Corporate, Contract, Family, Property, or Tax law with transparent reviews.',
+                },
+                {
+                  step: '02',
+                  title: 'Choose Mode & Duration',
+                  desc: 'Pick encrypted Video Call, Audio Call, or Live Chat for 15, 30, or 60 minutes with clear fixed pricing.',
+                },
+                {
+                  step: '03',
+                  title: 'Secure Razorpay Checkout',
+                  desc: 'Complete payment with instant order generation, UPI, card, or netbanking. Funds held securely in escrow.',
+                },
+                {
+                  step: '04',
+                  title: 'Join Encrypted Room',
+                  desc: 'Enter your private consultation stage, share documents, receive strategic advice, and get written summaries.',
+                },
+              ].map((item) => (
+                <div
+                  key={item.step}
+                  className="rounded-3xl border border-slate-100 bg-slate-50/70 p-6 dark:border-slate-800 dark:bg-slate-800/40"
+                >
+                  <span className="font-mono text-2xl font-black text-blue-700 dark:text-blue-400">{item.step}</span>
+                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">{item.title}</h4>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Featured Advocates Spotlight */}
+        <section className="py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                  Featured Legal Counsel
+                </span>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+                  Consult Top-Rated Advocates
+                </h2>
+              </div>
+              <Link to="/lawyers" className="text-xs font-bold text-blue-700 hover:underline">
+                Explore Full Directory →
+              </Link>
+            </div>
+
+            <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {topLawyers.map((lawyer) => (
+                <div
+                  key={lawyer.id}
+                  className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <div>
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={
+                          lawyer.avatar ||
+                          'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
+                        }
+                        alt={lawyer.full_name}
+                        className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600"
+                      />
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                          {lawyer.full_name}
+                        </h4>
+                        <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 line-clamp-1">
+                          {lawyer.primary_specialty}
+                        </p>
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+                          </span>
+                          <span>({lawyer.total_consultations || 20})</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
+
+                    <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                      {lawyer.experience_years} Years Experience • {lawyer.city}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-slate-400">Fee from</span>
+                      <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                        ₹{lawyer.consultation_fee_15 || 499}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedLawyer(lawyer)}
+                      className="rounded-xl bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
+                    >
+                      Book Now
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Regulatory Disclaimer Banner */}
+        <section className="bg-slate-100 py-6 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+            <p className="text-[11px] text-slate-500 leading-relaxed max-w-4xl mx-auto">
+              <strong>STATUTORY & ETHICAL DISCLAIMER:</strong> ContractIQ is an independent legal technology and contract
+              lifecycle management platform. The advocates listed on this platform are independent legal practitioners
+              registered with their respective State Bar Councils. In accordance with the Advocates Act, 1961 and the Bar
+              Council of India Rules, this platform does not solicit legal work, advertise, or promote legal services. The
+              platform merely facilitates technological connectivity and contract management infrastructure. AI-generated
+              analyses are informational tools and do not constitute authoritative legal advice.
+            </p>
           </div>
         </section>
       </main>
 
       <Footer />
+
+      {/* Booking Modal */}
+      {selectedLawyer && (
+        <BookingModal
+          lawyer={selectedLawyer}
+          isOpen={!!selectedLawyer}
+          onClose={() => setSelectedLawyer(null)}
+        />
+      )}
     </div>
   );
 };

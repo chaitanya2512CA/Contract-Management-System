@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import app from './app.js';
 import { connectDB } from './config/db.js';
-import { seedDatabase } from './config/seed.js';
+import { ensureDemoAccounts } from './config/seed.js';
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
-    await seedDatabase();
+    await ensureDemoAccounts();
 
     app.listen(PORT, () => {
       console.log(`====================================================`);

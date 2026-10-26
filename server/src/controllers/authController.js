@@ -416,6 +416,13 @@ export const getMe = async (req, res) => {
     }
 
     const user = mapUser(userRes.rows[0]);
+    if (user.role === 'lawyer') {
+      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+      if (lawyerRes.rows.length > 0) {
+        user.lawyerProfile = lawyerRes.rows[0];
+      }
+    }
+
     res.status(200).json({
       success: true,
       user,
@@ -579,5 +586,158 @@ export const forgotPassword = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error processing password reset request.' });
+  }
+};
+
+/**
+ * Universal Login for ContractIQ
+ * Handles client, lawyer, business, and admin authentication
+ */
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    if (row.is_active === false) {
+      return res.status(403).json({ success: false, message: 'Your account is deactivated. Please contact support.' });
+    }
+
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+
+    const user = mapUser(row);
+
+    // If lawyer, include lawyer profile details
+    if (user.role === 'lawyer') {
+      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+      if (lawyerRes.rows.length > 0) {
+        user.lawyerProfile = lawyerRes.rows[0];
+      }
+    }
+
+    sendAuthResponse(user, 200, res, 'Logged in successfully.');
+  } catch (error) {
+    console.error('Error in login:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
+  }
+};
+
+/**
+ * Universal Registration for ContractIQ
+ * Supports client, lawyer, and business registration
+ */
+export const register = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role = 'client',
+      phone = '',
+      companyName = '',
+      city = 'New Delhi',
+      state = 'Delhi',
+      // Lawyer-specific fields
+      primarySpecialty = 'Contract Lawyer',
+      additionalSpecialties = [],
+      experienceYears = 3,
+      barCouncilNumber = '',
+      barState = '',
+      consultationFee15 = 499,
+      consultationFee30 = 899,
+      consultationFee60 = 1499,
+      bio = ''
+    } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const userId = crypto.randomUUID();
+
+    const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
+    const assignedRole = allowedRoles.includes(role) ? role : 'client';
+
+    await query(
+      `INSERT INTO users (id, name, email, password_hash, role, phone, company_name, city, state, bio, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+      [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+    );
+
+    let lawyerProfile = null;
+    if (assignedRole === 'lawyer') {
+      const profileId = crypto.randomUUID();
+      const lawyerRes = await query(
+        `INSERT INTO lawyer_profiles (
+          id, user_id, full_name, headline, primary_specialty, additional_specialties,
+          experience_years, bar_council_number, bar_state, languages,
+          consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
+          is_instant_booking, is_verified, verification_status, bio, city, state
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, false, 'pending', $15, $16, $17)
+        RETURNING *`,
+        [
+          profileId,
+          userId,
+          name.trim(),
+          `${primarySpecialty} | Advocate`,
+          primarySpecialty,
+          JSON.stringify(additionalSpecialties),
+          Number(experienceYears) || 3,
+          barCouncilNumber,
+          barState,
+          JSON.stringify(['English', 'Hindi']),
+          Number(consultationFee15) || 499,
+          Number(consultationFee30) || 899,
+          Number(consultationFee60) || 1499,
+          JSON.stringify(['chat', 'audio', 'video']),
+          bio,
+          city,
+          state
+        ]
+      );
+      lawyerProfile = lawyerRes.rows[0];
+
+      // Add default availability (Mon-Fri 09:00 - 18:00)
+      for (let day = 1; day <= 5; day++) {
+        await query(
+          `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
+           VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
+          [crypto.randomUUID(), profileId, day]
+        );
+      }
+    }
+
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = mapUser(userRes.rows[0]);
+    if (lawyerProfile) {
+      user.lawyerProfile = lawyerProfile;
+    }
+
+    sendAuthResponse(user, 201, res, 'Account registered successfully.');
+  } catch (error) {
+    console.error('Error in register:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
   }
 };

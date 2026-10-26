@@ -8,6 +8,8 @@ interface AuthContextType {
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  login: (creds: { email: string; password: string }) => Promise<User>;
+  register: (data: any) => Promise<User>;
   loginStudent: (creds: { email: string; password: string }) => Promise<User>;
   loginOrganizer: (creds: { email: string; password: string }) => Promise<User>;
   loginAdmin: (creds: { email: string; password: string }) => Promise<User>;
@@ -68,6 +70,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return resData.user;
   };
 
+  const login = async (creds: { email: string; password: string }) => {
+    const res = await authService.login(creds);
+    return handleAuthSuccess(res.data);
+  };
+
+  const register = async (data: any) => {
+    const res = await authService.register(data);
+    return handleAuthSuccess(res.data);
+  };
+
   const loginStudent = async (creds: { email: string; password: string }) => {
     const res = await authService.loginStudent(creds);
     return handleAuthSuccess(res.data);
@@ -115,6 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: user?.role || null,
         isAuthenticated: !!user && !!token,
         isLoading,
+        login,
+        register,
         loginStudent,
         loginOrganizer,
         loginAdmin,
