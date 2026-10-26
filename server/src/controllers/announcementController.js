@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { query } from '../config/db.js';
+import { validateText } from '../utils/validation.js';
 
 export const createAnnouncement = async (req, res) => {
   try {
@@ -7,9 +8,18 @@ export const createAnnouncement = async (req, res) => {
     const { title, content, message, priority, eventId } = req.body;
     const bodyText = content || message;
 
-    if (!title || !bodyText) {
-      return res.status(400).json({ success: false, message: 'Title and content/message are required.' });
+    const titleCheck = validateText(title, 'Announcement title', 3, 200, true);
+    if (!titleCheck.isValid) {
+      return res.status(400).json({ success: false, message: titleCheck.message });
     }
+
+    const msgCheck = validateText(bodyText, 'Announcement message', 3, 2000, true);
+    if (!msgCheck.isValid) {
+      return res.status(400).json({ success: false, message: msgCheck.message });
+    }
+
+    const validPriorities = ['normal', 'important', 'urgent'];
+    const chosenPriority = priority && validPriorities.includes(priority) ? priority : 'normal';
 
     let eventTitle = '';
     if (eventId) {
@@ -33,9 +43,9 @@ export const createAnnouncement = async (req, res) => {
         newId,
         eventId || null,
         author.id || author._id,
-        title.trim(),
-        bodyText.trim(),
-        priority || 'normal',
+        titleCheck.value,
+        msgCheck.value,
+        chosenPriority,
       ]
     );
     const row = insertRes.rows[0];

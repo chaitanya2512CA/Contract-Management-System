@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { eventService } from '../../services/api';
 import { Button } from '../../components/common/Button';
+import { validateText, validateUrl } from '../../utils/validation';
 
 const CATEGORIES = [
   'Technical',
@@ -90,20 +91,55 @@ export const EditEventPage: React.FC = () => {
     e.preventDefault();
     if (!id) return;
     setErrorMessage('');
+
+    const titleCheck = validateText(title, 'Event title', 3, 150, true);
+    if (!titleCheck.isValid) {
+      setErrorMessage(titleCheck.message);
+      return;
+    }
+
+    const descCheck = validateText(description, 'Event description', 10, 5000, true);
+    if (!descCheck.isValid) {
+      setErrorMessage(descCheck.message);
+      return;
+    }
+
+    const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+    if (!venueCheck.isValid) {
+      setErrorMessage(venueCheck.message);
+      return;
+    }
+
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) {
+        setErrorMessage(bannerCheck.message);
+        return;
+      }
+    }
+
+    if (venueType !== 'offline' && meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) {
+        setErrorMessage(meetCheck.message);
+        return;
+      }
+    }
+
     setIsSaving(true);
 
     try {
       const res = await eventService.updateEvent(id, {
-        title,
-        description,
+        title: titleCheck.normalized,
+        description: descCheck.normalized,
         category,
         bannerImage,
         eventDate,
         startTime,
         endTime,
-        venue,
+        venue: venueCheck.normalized,
         venueType,
-        meetingUrl: venueType !== 'offline' ? meetingUrl : '',
+        meetingUrl: venueType !== 'offline' ? meetingUrl.trim() : '',
         maxCapacity: Number(maxCapacity),
         registrationDeadline,
         isPaid,
@@ -208,14 +244,14 @@ export const EditEventPage: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Description
               </label>
-              <span className={`text-[10px] ${description.length > 1900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
-                {description.length} / 2000
+              <span className={`text-[10px] ${description.length > 4900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                {description.length} / 5000
               </span>
             </div>
             <textarea
               required
               rows={4}
-              maxLength={2000}
+              maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"

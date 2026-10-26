@@ -10,10 +10,18 @@ import {
   Sparkles,
   AlertCircle,
   ArrowRight,
+  Phone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/common/Button';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
+import {
+  validateName,
+  validateEmail,
+  validatePassword,
+  validatePhone,
+  validateText,
+} from '../../utils/validation';
 
 const DEPARTMENTS = [
   'Computer Science & Engineering',
@@ -45,6 +53,7 @@ export const StudentRegisterPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [phone, setPhone] = useState('');
   const [department, setDepartment] = useState(DEPARTMENTS[0]);
   const [graduationYear, setGraduationYear] = useState('2026');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([
@@ -68,20 +77,33 @@ export const StudentRegisterPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (name.trim().length < 2 || name.trim().length > 100) {
-      setErrorMessage('Full name must be between 2 and 100 characters.');
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) {
+      setErrorMessage(nameCheck.message);
       return;
     }
-    if (email.trim().length > 254) {
-      setErrorMessage('Email address cannot exceed 254 characters.');
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      setErrorMessage(emailCheck.message);
       return;
     }
-    if (password.length < 12 || password.length > 128) {
-      setErrorMessage('Password must be between 12 and 128 characters for security.');
+
+    const pwdCheck = validatePassword(password, true);
+    if (!pwdCheck.isValid) {
+      setErrorMessage(pwdCheck.message);
       return;
     }
-    if (studentId.trim().length > 50) {
-      setErrorMessage('Student ID cannot exceed 50 characters.');
+
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) {
+      setErrorMessage(phoneCheck.message);
+      return;
+    }
+
+    const idCheck = validateText(studentId, 'Student ID', 0, 50, false);
+    if (!idCheck.isValid) {
+      setErrorMessage(idCheck.message);
       return;
     }
 
@@ -89,12 +111,13 @@ export const StudentRegisterPage: React.FC = () => {
 
     try {
       await registerStudent({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        studentId: studentId.trim(),
+        name: nameCheck.normalized,
+        email: emailCheck.normalized,
+        password: pwdCheck.normalized,
+        studentId: idCheck.normalized,
         department,
         graduationYear: Number(graduationYear),
+        phone: phoneCheck.normalized,
         interests: selectedInterests,
       });
       navigate('/student/dashboard');
@@ -197,18 +220,18 @@ export const StudentRegisterPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Password (min 12 chars)
+                  Password (min 8 chars)
                 </label>
                 <div className="mt-1.5 relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
                     type="password"
                     required
-                    minLength={12}
+                    minLength={8}
                     maxLength={128}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Min. 12 characters"
+                    placeholder="Min. 8 characters"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
                   />
                 </div>
@@ -218,19 +241,19 @@ export const StudentRegisterPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Academic Department
+                  Mobile Number (Optional)
                 </label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 px-3 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900 cursor-pointer"
-                >
-                  {DEPARTMENTS.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-1.5 relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="tel"
+                    maxLength={25}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 9876543210"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
+                  />
+                </div>
               </div>
 
               <div>
@@ -248,6 +271,23 @@ export const StudentRegisterPage: React.FC = () => {
                   <option value="2028">2028</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Academic Department
+              </label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 px-3 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900 cursor-pointer"
+              >
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Interest Tags for AI Recommendation Engine */}

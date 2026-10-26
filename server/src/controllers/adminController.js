@@ -1,6 +1,14 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { query, mapUser, mapEvent, mapAuditLog } from '../config/db.js';
+import {
+  validateName,
+  validateEmail,
+  validatePassword,
+  validatePhone,
+  validateText,
+  validateUrl,
+} from '../utils/validation.js';
 
 /**
  * Get Comprehensive Admin Dashboard Statistics & Analytics
@@ -437,19 +445,33 @@ export const createAdminAccount = async (req, res) => {
     const currentAdmin = req.user;
     const { name, email, password, adminId, department, phone } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
-    }
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) return res.status(400).json({ success: false, message: nameCheck.message });
 
-    const existingRes = await query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email.trim()]);
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) return res.status(400).json({ success: false, message: emailCheck.message });
+
+    const pwdCheck = validatePassword(password, true);
+    if (!pwdCheck.isValid) return res.status(400).json({ success: false, message: pwdCheck.message });
+
+    const idCheck = validateText(adminId, 'Admin ID', 0, 50, false);
+    if (!idCheck.isValid) return res.status(400).json({ success: false, message: idCheck.message });
+
+    const deptCheck = validateText(department, 'Department', 0, 100, false);
+    if (!deptCheck.isValid) return res.status(400).json({ success: false, message: deptCheck.message });
+
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) return res.status(400).json({ success: false, message: phoneCheck.message });
+
+    const existingRes = await query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [emailCheck.value]);
     if (existingRes.rows.length > 0) {
       return res.status(400).json({ success: false, message: 'An account with this email already exists.' });
     }
 
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const passwordHash = await bcrypt.hash(pwdCheck.value, salt);
     const newId = crypto.randomUUID();
-    const assignedAdminId = adminId || `ADM-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const assignedAdminId = idCheck.value || `ADM-2026-${Math.floor(100 + Math.random() * 900)}`;
 
     const insertRes = await query(
       `INSERT INTO users (id, name, email, password_hash, role, admin_id, department, phone, is_active, created_at, updated_at)
@@ -457,12 +479,12 @@ export const createAdminAccount = async (req, res) => {
        RETURNING *`,
       [
         newId,
-        name.trim(),
-        email.trim(),
+        nameCheck.value,
+        emailCheck.value,
         passwordHash,
         assignedAdminId,
-        department || 'Campus Administration',
-        phone || '',
+        deptCheck.value || 'Campus Administration',
+        phoneCheck.value || '',
       ]
     );
     const newAdmin = mapUser(insertRes.rows[0]);
@@ -650,14 +672,33 @@ export const createAdminEvent = async (req, res) => {
       });
     }
 
-    if (title.trim().length < 3 || title.trim().length > 150) {
-      return res.status(400).json({ success: false, message: 'Event title must be between 3 and 150 characters.' });
+    const titleCheck = validateText(title, 'Event title', 3, 150, true);
+    if (!titleCheck.isValid) return res.status(400).json({ success: false, message: titleCheck.message });
+
+    const descCheck = validateText(description, 'Event description', 10, 5000, true);
+    if (!descCheck.isValid) return res.status(400).json({ success: false, message: descCheck.message });
+
+    const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+    if (!venueCheck.isValid) return res.status(400).json({ success: false, message: venueCheck.message });
+
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) return res.status(400).json({ success: false, message: bannerCheck.message });
     }
-    if (description.trim().length > 2000) {
-      return res.status(400).json({ success: false, message: 'Event description cannot exceed 2,000 characters.' });
+
+    if (meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) return res.status(400).json({ success: false, message: meetCheck.message });
     }
-    if (venue.trim().length > 200) {
-      return res.status(400).json({ success: false, message: 'Venue location cannot exceed 200 characters.' });
+
+    const parsedCap = Number(maxCapacity);
+    if (maxCapacity !== undefined && (isNaN(parsedCap) || parsedCap < 1 || parsedCap > 100000)) {
+      return res.status(400).json({ success: false, message: 'Max capacity must be between 1 and 100,000.' });
+    }
+
+    const parsedPrice = Number(ticketPrice);
+    if (isPaid && (isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > 1000000)) {
+      return res.status(400).json({ success: false, message: 'Ticket price must be between 0 and 1,000,000.' });
     }
 
     const currentAdmin = req.user;
@@ -765,14 +806,37 @@ export const updateAdminEvent = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Event not found.' });
     }
 
-    if (title && (title.trim().length < 3 || title.trim().length > 150)) {
-      return res.status(400).json({ success: false, message: 'Event title must be between 3 and 150 characters.' });
+    if (title !== undefined) {
+      const titleCheck = validateText(title, 'Event title', 3, 150, true);
+      if (!titleCheck.isValid) return res.status(400).json({ success: false, message: titleCheck.message });
     }
-    if (description && description.trim().length > 2000) {
-      return res.status(400).json({ success: false, message: 'Event description cannot exceed 2,000 characters.' });
+    if (description !== undefined) {
+      const descCheck = validateText(description, 'Event description', 10, 5000, true);
+      if (!descCheck.isValid) return res.status(400).json({ success: false, message: descCheck.message });
     }
-    if (venue && venue.trim().length > 200) {
-      return res.status(400).json({ success: false, message: 'Venue cannot exceed 200 characters.' });
+    if (venue !== undefined) {
+      const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+      if (!venueCheck.isValid) return res.status(400).json({ success: false, message: venueCheck.message });
+    }
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) return res.status(400).json({ success: false, message: bannerCheck.message });
+    }
+    if (meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) return res.status(400).json({ success: false, message: meetCheck.message });
+    }
+    if (maxCapacity !== undefined) {
+      const capNum = Number(maxCapacity);
+      if (isNaN(capNum) || capNum < 1 || capNum > 100000) {
+        return res.status(400).json({ success: false, message: 'Max capacity must be between 1 and 100,000.' });
+      }
+    }
+    if (ticketPrice !== undefined && isPaid) {
+      const priceNum = Number(ticketPrice);
+      if (isNaN(priceNum) || priceNum < 0 || priceNum > 1000000) {
+        return res.status(400).json({ success: false, message: 'Ticket price must be between 0 and 1,000,000.' });
+      }
     }
 
     const currentAdmin = req.user;

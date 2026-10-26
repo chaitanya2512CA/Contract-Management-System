@@ -202,7 +202,8 @@ export const AdminEventsPage: React.FC = () => {
     else if (formData.title.trim().length > 150) errors.title = 'Title cannot exceed 150 characters.';
 
     if (!formData.description.trim()) errors.description = 'Description is required.';
-    else if (formData.description.trim().length > 2000) errors.description = 'Description cannot exceed 2000 characters.';
+    else if (formData.description.trim().length < 10) errors.description = 'Description must be at least 10 characters.';
+    else if (formData.description.trim().length > 5000) errors.description = 'Description cannot exceed 5000 characters.';
 
     if (!formData.venue.trim()) errors.venue = 'Venue location is required.';
     else if (formData.venue.trim().length > 200) errors.venue = 'Venue cannot exceed 200 characters.';
@@ -715,13 +716,13 @@ export const AdminEventsPage: React.FC = () => {
                   <label className="font-semibold text-slate-700 dark:text-slate-300">
                     Description *
                   </label>
-                  <span className={`text-[10px] ${formData.description.length > 1900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
-                    {formData.description.length} / 2000
+                  <span className={`text-[10px] ${formData.description.length > 4900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                    {formData.description.length} / 5000
                   </span>
                 </div>
                 <textarea
                   rows={4}
-                  maxLength={2000}
+                  maxLength={5000}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Provide comprehensive details about schedule, judging criteria, eligibility, and topics..."

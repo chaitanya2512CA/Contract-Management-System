@@ -2,6 +2,13 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, mapUser } from '../config/db.js';
+import {
+  validateName,
+  validateEmail,
+  validatePassword,
+  validatePhone,
+  validateText,
+} from '../utils/validation.js';
 
 // Helper to sign JWT token
 const signToken = (id, role) => {
@@ -33,53 +40,38 @@ export const registerStudent = async (req, res) => {
   try {
     const { name, email, password, studentId, department, graduationYear, phone, interests } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, email, and password are required.',
-      });
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) {
+      return res.status(400).json({ success: false, message: nameCheck.message });
     }
 
-    if (name.trim().length < 2 || name.trim().length > 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Full name must be between 2 and 100 characters long.',
-      });
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ success: false, message: emailCheck.message });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid college email address.',
-      });
+    const pwdCheck = validatePassword(password, true);
+    if (!pwdCheck.isValid) {
+      return res.status(400).json({ success: false, message: pwdCheck.message });
     }
 
-    if (cleanEmail.length > 254) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email cannot exceed 254 characters.',
-      });
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) {
+      return res.status(400).json({ success: false, message: phoneCheck.message });
     }
 
-    if (password.length < 12 || password.length > 128) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be between 12 and 128 characters for security compliance.',
-      });
+    const idCheck = validateText(studentId, 'Student ID', 0, 50, false);
+    if (!idCheck.isValid) {
+      return res.status(400).json({ success: false, message: idCheck.message });
     }
 
-    if (studentId && studentId.trim().length > 50) {
-      return res.status(400).json({
-        success: false,
-        message: 'Student ID cannot exceed 50 characters.',
-      });
+    const deptCheck = validateText(department, 'Department', 0, 100, false);
+    if (!deptCheck.isValid) {
+      return res.status(400).json({ success: false, message: deptCheck.message });
     }
 
     // Check duplicate email
-    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [emailCheck.value]);
     if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
@@ -88,7 +80,7 @@ export const registerStudent = async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const passwordHash = await bcrypt.hash(pwdCheck.value, salt);
     const id = crypto.randomUUID();
 
     const insertRes = await query(
@@ -97,13 +89,13 @@ export const registerStudent = async (req, res) => {
        RETURNING *`,
       [
         id,
-        name.trim(),
-        cleanEmail,
+        nameCheck.value,
+        emailCheck.value,
         passwordHash,
-        studentId ? studentId.trim() : '',
-        department || 'General Engineering',
+        idCheck.value || '',
+        deptCheck.value || 'General Engineering',
         graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
-        phone ? phone.trim() : '',
+        phoneCheck.value || '',
         JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
       ]
     );
@@ -131,36 +123,42 @@ export const registerOrganizer = async (req, res) => {
   try {
     const { name, email, password, employeeId, department, organizationName, phone } = req.body;
 
-    if (!name || !email || !password || !organizationName) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, email, password, and organization name are required.',
-      });
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) {
+      return res.status(400).json({ success: false, message: nameCheck.message });
     }
 
-    if (name.trim().length < 2 || name.trim().length > 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Full name must be between 2 and 100 characters long.',
-      });
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ success: false, message: emailCheck.message });
     }
 
-    if (email.trim().length > 254) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email cannot exceed 254 characters.',
-      });
+    const pwdCheck = validatePassword(password, true);
+    if (!pwdCheck.isValid) {
+      return res.status(400).json({ success: false, message: pwdCheck.message });
     }
 
-    if (password.length < 12 || password.length > 128) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be between 12 and 128 characters for security compliance.',
-      });
+    const orgCheck = validateText(organizationName, 'Organization name', 2, 150, true);
+    if (!orgCheck.isValid) {
+      return res.status(400).json({ success: false, message: orgCheck.message });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    const deptCheck = validateText(department, 'Department', 0, 100, false);
+    if (!deptCheck.isValid) {
+      return res.status(400).json({ success: false, message: deptCheck.message });
+    }
+
+    const empCheck = validateText(employeeId, 'Employee ID', 0, 50, false);
+    if (!empCheck.isValid) {
+      return res.status(400).json({ success: false, message: empCheck.message });
+    }
+
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) {
+      return res.status(400).json({ success: false, message: phoneCheck.message });
+    }
+
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [emailCheck.value]);
     if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
@@ -169,14 +167,23 @@ export const registerOrganizer = async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const passwordHash = await bcrypt.hash(pwdCheck.value, salt);
     const id = crypto.randomUUID();
 
     const insertRes = await query(
       `INSERT INTO users (id, name, email, password_hash, role, employee_id, department, organization_name, phone, is_active)
        VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true)
        RETURNING *`,
-      [id, name.trim(), cleanEmail, passwordHash, employeeId || '', department || 'Student Affairs', organizationName, phone || '']
+      [
+        id,
+        nameCheck.value,
+        emailCheck.value,
+        passwordHash,
+        empCheck.value || '',
+        deptCheck.value || 'Student Affairs',
+        orgCheck.value,
+        phoneCheck.value || '',
+      ]
     );
 
     const user = mapUser(insertRes.rows[0]);
@@ -201,6 +208,13 @@ export const loginStudent = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide both email and password.',
+      });
+    }
+
+    if (typeof email !== 'string' || email.trim().length > 254 || typeof password !== 'string' || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid credentials. Please verify your email and password.',
       });
     }
 
@@ -264,6 +278,13 @@ export const loginOrganizer = async (req, res) => {
       });
     }
 
+    if (typeof email !== 'string' || email.trim().length > 254 || typeof password !== 'string' || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid credentials. Please verify your email and password.',
+      });
+    }
+
     const cleanEmail = email.trim().toLowerCase();
     const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
 
@@ -319,6 +340,13 @@ export const loginAdmin = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Administrator email and password are required.',
+      });
+    }
+
+    if (typeof email !== 'string' || email.trim().length > 254 || typeof password !== 'string' || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid administrative credentials or unauthorized account.',
       });
     }
 
@@ -405,6 +433,43 @@ export const updateProfile = async (req, res) => {
     const { name, phone, bio, department, graduationYear, interests, organizationName } = req.body;
     const userId = req.user.id || req.user._id;
 
+    let cleanName = null;
+    if (name !== undefined && name !== null) {
+      const check = validateName(name, 'Full name');
+      if (!check.isValid) return res.status(400).json({ success: false, message: check.message });
+      cleanName = check.value;
+    }
+
+    let cleanPhone = null;
+    if (phone !== undefined && phone !== null && phone.trim() !== '') {
+      const check = validatePhone(phone, false);
+      if (!check.isValid) return res.status(400).json({ success: false, message: check.message });
+      cleanPhone = check.value;
+    } else if (phone === '') {
+      cleanPhone = '';
+    }
+
+    let cleanBio = null;
+    if (bio !== undefined && bio !== null) {
+      const check = validateText(bio, 'Bio', 0, 1000, false);
+      if (!check.isValid) return res.status(400).json({ success: false, message: check.message });
+      cleanBio = check.value;
+    }
+
+    let cleanDept = null;
+    if (department !== undefined && department !== null) {
+      const check = validateText(department, 'Department', 0, 100, false);
+      if (!check.isValid) return res.status(400).json({ success: false, message: check.message });
+      cleanDept = check.value;
+    }
+
+    let cleanOrg = null;
+    if (organizationName !== undefined && organizationName !== null) {
+      const check = validateText(organizationName, 'Organization name', 0, 150, false);
+      if (!check.isValid) return res.status(400).json({ success: false, message: check.message });
+      cleanOrg = check.value;
+    }
+
     const updateRes = await query(
       `UPDATE users
        SET name = COALESCE($1, name),
@@ -418,13 +483,13 @@ export const updateProfile = async (req, res) => {
        WHERE id = $8
        RETURNING *`,
       [
-        name ? name.trim() : null,
-        phone ? phone.trim() : null,
-        bio !== undefined ? bio : null,
-        department || null,
+        cleanName,
+        cleanPhone,
+        cleanBio,
+        cleanDept,
         graduationYear ? Number(graduationYear) : null,
         interests ? JSON.stringify(interests) : null,
-        organizationName || null,
+        cleanOrg,
         userId,
       ]
     );
@@ -455,10 +520,11 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    const pwdCheck = validatePassword(newPassword, true);
+    if (!pwdCheck.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters long.',
+        message: pwdCheck.message,
       });
     }
 
@@ -476,7 +542,7 @@ export const changePassword = async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(10);
-    const newHash = await bcrypt.hash(newPassword, salt);
+    const newHash = await bcrypt.hash(pwdCheck.value, salt);
     await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
 
     res.status(200).json({
@@ -494,12 +560,12 @@ export const changePassword = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Please provide your registered email address.' });
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ success: false, message: emailCheck.message });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const userRes = await query('SELECT name FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    const userRes = await query('SELECT name FROM users WHERE LOWER(email) = $1', [emailCheck.value]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,

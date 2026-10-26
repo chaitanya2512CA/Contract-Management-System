@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { User, Mail, BookOpen, Sparkles, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, Mail, BookOpen, Sparkles, Lock, CheckCircle2, AlertCircle, Phone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/api';
 import { Button } from '../../components/common/Button';
+import {
+  validateName,
+  validatePassword,
+  validatePhone,
+  validateText,
+} from '../../utils/validation';
 
 const AVAILABLE_INTERESTS = [
   'Hackathons',
@@ -29,6 +35,7 @@ export const StudentProfilePage: React.FC = () => {
   const [interests, setInterests] = useState<string[]>(user?.interests || []);
   const [isSaving, setIsSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,15 +53,41 @@ export const StudentProfilePage: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     setProfileSuccess('');
+    setProfileError('');
+
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) {
+      setProfileError(nameCheck.message);
+      return;
+    }
+
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) {
+      setProfileError(phoneCheck.message);
+      return;
+    }
+
+    const deptCheck = validateText(department, 'Department', 0, 100, false);
+    if (!deptCheck.isValid) {
+      setProfileError(deptCheck.message);
+      return;
+    }
+
+    const bioCheck = validateText(bio, 'Bio', 0, 1000, false);
+    if (!bioCheck.isValid) {
+      setProfileError(bioCheck.message);
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
       const res = await authService.updateProfile({
-        name,
-        department,
-        phone,
-        bio,
+        name: nameCheck.normalized,
+        department: deptCheck.normalized,
+        phone: phoneCheck.normalized,
+        bio: bioCheck.normalized,
         interests,
       });
 
@@ -64,7 +97,7 @@ export const StudentProfilePage: React.FC = () => {
         setTimeout(() => setProfileSuccess(''), 4000);
       }
     } catch (err: any) {
-      console.error('Failed to update profile', err);
+      setProfileError(err.response?.data?.message || 'Failed to update profile.');
     } finally {
       setIsSaving(false);
     }
@@ -72,11 +105,23 @@ export const StudentProfilePage: React.FC = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsChangingPass(true);
     setPassMessage(null);
 
+    if (!currentPassword) {
+      setPassMessage({ text: 'Current password is required.', isError: true });
+      return;
+    }
+
+    const pwdCheck = validatePassword(newPassword, true);
+    if (!pwdCheck.isValid) {
+      setPassMessage({ text: pwdCheck.message, isError: true });
+      return;
+    }
+
+    setIsChangingPass(true);
+
     try {
-      const res = await authService.changePassword({ currentPassword, newPassword });
+      const res = await authService.changePassword({ currentPassword, newPassword: pwdCheck.normalized });
       setPassMessage({ text: res.data.message || 'Password changed successfully.', isError: false });
       setCurrentPassword('');
       setNewPassword('');
@@ -108,6 +153,13 @@ export const StudentProfilePage: React.FC = () => {
         </div>
       )}
 
+      {profileError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+          <span>{profileError}</span>
+        </div>
+      )}
+
       {/* Profile Form */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h3 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -123,6 +175,7 @@ export const StudentProfilePage: React.FC = () => {
               <input
                 type="text"
                 required
+                maxLength={100}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
@@ -149,6 +202,7 @@ export const StudentProfilePage: React.FC = () => {
               </label>
               <input
                 type="text"
+                maxLength={100}
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
@@ -157,23 +211,31 @@ export const StudentProfilePage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Student ID
+                Contact Mobile (Optional)
               </label>
               <input
-                type="text"
-                disabled
-                value={user?.studentId || 'N/A'}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2.5 text-xs text-slate-500 cursor-not-allowed dark:border-slate-800 dark:bg-slate-800/40"
+                type="tel"
+                maxLength={25}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 9876543210"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Bio / Academic Interests
-            </label>
+            <div className="flex justify-between items-center">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Bio / Academic Interests
+              </label>
+              <span className={`text-[11px] ${bio.length > 900 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                {bio.length}/1000 characters
+              </span>
+            </div>
             <textarea
               rows={3}
+              maxLength={1000}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="Tell other students and event organizers about your technical focus or campus extracurriculars..."
@@ -263,14 +325,16 @@ export const StudentProfilePage: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              New Password
+              New Password (min 8 chars)
             </label>
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
+              maxLength={128}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Min. 8 characters"
               className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
             />
           </div>

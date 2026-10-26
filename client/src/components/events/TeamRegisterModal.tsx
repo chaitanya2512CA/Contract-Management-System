@@ -99,13 +99,15 @@ export const TeamRegisterModal: React.FC<TeamRegisterModalProps> = ({
               <input
                 type="text"
                 required
+                minLength={2}
+                maxLength={100}
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder="e.g. CyberKnights or ByteBuilders"
                 className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               />
               <p className="mt-1.5 text-[11px] text-slate-400">
-                You will become the team leader and receive an invite code to share with your teammates.
+                You will become the team leader and receive an invite code to share with your teammates (2-100 characters).
               </p>
             </div>
           ) : (
@@ -116,6 +118,7 @@ export const TeamRegisterModal: React.FC<TeamRegisterModalProps> = ({
               <input
                 type="text"
                 required
+                maxLength={50}
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="e.g. TEAM-8942"

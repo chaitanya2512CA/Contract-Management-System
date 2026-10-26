@@ -213,7 +213,17 @@ export const initSchema = async () => {
       `ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS attendance_status VARCHAR(20) DEFAULT 'unmarked';`,
       `ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS qr_code_data TEXT DEFAULT '';`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_attendances_student_event ON attendances(student_id, event_id);`,
-      `CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));`
+      `CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));`,
+      // Field length & integrity constraints
+      `ALTER TABLE users ADD CONSTRAINT chk_users_name_len CHECK (length(trim(name)) >= 2 AND length(name) <= 100);`,
+      `ALTER TABLE users ADD CONSTRAINT chk_users_email_len CHECK (length(email) <= 254);`,
+      `ALTER TABLE users ADD CONSTRAINT chk_users_phone_len CHECK (length(phone) <= 30);`,
+      `ALTER TABLE events ADD CONSTRAINT chk_events_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 150);`,
+      `ALTER TABLE events ADD CONSTRAINT chk_events_desc_len CHECK (length(description) <= 5000);`,
+      `ALTER TABLE events ADD CONSTRAINT chk_events_venue_len CHECK (length(venue) <= 200);`,
+      `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 200);`,
+      `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_msg_len CHECK (length(message) <= 2000);`,
+      `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`
     ];
 
     for (const statement of migrations) {

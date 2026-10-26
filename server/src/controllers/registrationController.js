@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query, getClient, mapRegistration } from '../config/db.js';
 import { generateTicketCode, generateQRCodeDataUrl } from '../utils/qrHelper.js';
+import { validateText } from '../utils/validation.js';
 
 /**
  * Register Student for Event (Single Participant)
@@ -137,8 +138,9 @@ export const registerTeam = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Event ID is required.' });
     }
 
-    if (!teamName || !teamName.trim()) {
-      return res.status(400).json({ success: false, message: 'Team name is required.' });
+    const teamCheck = validateText(teamName, 'Team name', 2, 100, true);
+    if (!teamCheck.isValid) {
+      return res.status(400).json({ success: false, message: teamCheck.message });
     }
 
     await client.query('BEGIN');
@@ -175,7 +177,7 @@ export const registerTeam = async (req, res) => {
       `INSERT INTO event_registrations (id, event_id, user_id, ticket_code, status, qr_code_data, team_name)
        VALUES ($1, $2, $3, $4, 'confirmed', $5, $6)
        RETURNING *`,
-      [regId, eventId, userId, ticketCode, qrCodeData, teamName.trim()]
+      [regId, eventId, userId, ticketCode, qrCodeData, teamCheck.value]
     );
 
     await client.query('UPDATE events SET registered_count = registered_count + 1 WHERE id = $1', [eventId]);

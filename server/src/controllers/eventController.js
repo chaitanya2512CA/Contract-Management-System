@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { query, mapEvent } from '../config/db.js';
+import { validateText, validateUrl } from '../utils/validation.js';
 
 /**
  * Get Public / Approved Events with Filtering & Search
@@ -52,10 +53,11 @@ export const getEvents = async (req, res) => {
       values.push(isPaid === 'true');
     }
 
-    // Search filter
+    // Search filter (capped to 200 chars to prevent query bloat)
     if (search && search.trim()) {
+      const sanitizedSearch = search.trim().slice(0, 200);
       conditions.push(`(LOWER(title) LIKE $${paramIndex} OR LOWER(description) LIKE $${paramIndex} OR LOWER(venue) LIKE $${paramIndex})`);
-      values.push(`%${search.trim().toLowerCase()}%`);
+      values.push(`%${sanitizedSearch.toLowerCase()}%`);
       paramIndex++;
     }
 
@@ -246,25 +248,43 @@ export const createEvent = async (req, res) => {
       });
     }
 
-    if (title.trim().length < 3 || title.trim().length > 150) {
-      return res.status(400).json({
-        success: false,
-        message: 'Event title must be between 3 and 150 characters long.',
-      });
+    const titleCheck = validateText(title, 'Event title', 3, 150, true);
+    if (!titleCheck.isValid) {
+      return res.status(400).json({ success: false, message: titleCheck.message });
     }
 
-    if (description.trim().length > 2000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Event description cannot exceed 2,000 characters.',
-      });
+    const descCheck = validateText(description, 'Event description', 10, 5000, true);
+    if (!descCheck.isValid) {
+      return res.status(400).json({ success: false, message: descCheck.message });
     }
 
-    if (venue.trim().length > 200) {
-      return res.status(400).json({
-        success: false,
-        message: 'Venue location cannot exceed 200 characters.',
-      });
+    const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+    if (!venueCheck.isValid) {
+      return res.status(400).json({ success: false, message: venueCheck.message });
+    }
+
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) {
+        return res.status(400).json({ success: false, message: bannerCheck.message });
+      }
+    }
+
+    if (meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) {
+        return res.status(400).json({ success: false, message: meetCheck.message });
+      }
+    }
+
+    const parsedCap = Number(maxCapacity);
+    if (maxCapacity !== undefined && (isNaN(parsedCap) || parsedCap < 1 || parsedCap > 100000)) {
+      return res.status(400).json({ success: false, message: 'Max capacity must be between 1 and 100,000.' });
+    }
+
+    const parsedPrice = Number(ticketPrice);
+    if (isPaid && (isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > 1000000)) {
+      return res.status(400).json({ success: false, message: 'Ticket price must be between 0 and 1,000,000.' });
     }
 
     const creatorId = req.user.id || req.user._id;
@@ -371,6 +391,45 @@ export const updateEvent = async (req, res) => {
       eligibility,
       prerequisites,
     } = req.body;
+
+    if (title !== undefined) {
+      const titleCheck = validateText(title, 'Event title', 3, 150, true);
+      if (!titleCheck.isValid) return res.status(400).json({ success: false, message: titleCheck.message });
+    }
+
+    if (description !== undefined) {
+      const descCheck = validateText(description, 'Event description', 10, 5000, true);
+      if (!descCheck.isValid) return res.status(400).json({ success: false, message: descCheck.message });
+    }
+
+    if (venue !== undefined) {
+      const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+      if (!venueCheck.isValid) return res.status(400).json({ success: false, message: venueCheck.message });
+    }
+
+    if (meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) return res.status(400).json({ success: false, message: meetCheck.message });
+    }
+
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) return res.status(400).json({ success: false, message: bannerCheck.message });
+    }
+
+    if (maxCapacity !== undefined) {
+      const capNum = Number(maxCapacity);
+      if (isNaN(capNum) || capNum < 1 || capNum > 100000) {
+        return res.status(400).json({ success: false, message: 'Max capacity must be between 1 and 100,000.' });
+      }
+    }
+
+    if (ticketPrice !== undefined && isPaid) {
+      const priceNum = Number(ticketPrice);
+      if (isNaN(priceNum) || priceNum < 0 || priceNum > 1000000) {
+        return res.status(400).json({ success: false, message: 'Ticket price must be between 0 and 1,000,000.' });
+      }
+    }
 
     const updateRes = await query(
       `UPDATE events

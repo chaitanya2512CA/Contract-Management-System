@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { eventService } from '../../services/api';
 import { Button } from '../../components/common/Button';
+import { validateText, validateUrl } from '../../utils/validation';
 
 const CATEGORIES = [
   'Technical',
@@ -79,20 +80,55 @@ export const CreateEventPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    const titleCheck = validateText(title, 'Event title', 3, 150, true);
+    if (!titleCheck.isValid) {
+      setErrorMessage(titleCheck.message);
+      return;
+    }
+
+    const descCheck = validateText(description, 'Event description', 10, 5000, true);
+    if (!descCheck.isValid) {
+      setErrorMessage(descCheck.message);
+      return;
+    }
+
+    const venueCheck = validateText(venue, 'Venue location', 2, 200, true);
+    if (!venueCheck.isValid) {
+      setErrorMessage(venueCheck.message);
+      return;
+    }
+
+    if (bannerImage) {
+      const bannerCheck = validateUrl(bannerImage, 'Banner image URL', false);
+      if (!bannerCheck.isValid) {
+        setErrorMessage(bannerCheck.message);
+        return;
+      }
+    }
+
+    if (venueType !== 'offline' && meetingUrl) {
+      const meetCheck = validateUrl(meetingUrl, 'Meeting URL', false);
+      if (!meetCheck.isValid) {
+        setErrorMessage(meetCheck.message);
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
       const res = await eventService.createEvent({
-        title,
-        description,
+        title: titleCheck.normalized,
+        description: descCheck.normalized,
         category,
         bannerImage,
         eventDate,
         startTime,
         endTime,
-        venue,
+        venue: venueCheck.normalized,
         venueType,
-        meetingUrl: venueType !== 'offline' ? meetingUrl : '',
+        meetingUrl: venueType !== 'offline' ? meetingUrl.trim() : '',
         maxCapacity: Number(maxCapacity),
         registrationDeadline,
         isPaid,
@@ -199,14 +235,14 @@ export const CreateEventPage: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Detailed Description *
               </label>
-              <span className={`text-[10px] ${description.length > 1900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
-                {description.length} / 2000
+              <span className={`text-[10px] ${description.length > 4900 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
+                {description.length} / 5000
               </span>
             </div>
             <textarea
               required
               rows={4}
-              maxLength={2000}
+              maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe event highlights, guest speakers, learning objectives, schedules, prizes, etc."

@@ -8,16 +8,25 @@ import {
   Building,
   AlertCircle,
   ArrowRight,
+  Phone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/common/Button';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
+import {
+  validateName,
+  validateEmail,
+  validatePassword,
+  validatePhone,
+  validateText,
+} from '../../utils/validation';
 
 export const OrganizerRegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [organizationName, setOrganizationName] = useState('');
+  const [phone, setPhone] = useState('');
   const [department, setDepartment] = useState('Computer Science & Engineering');
   const [employeeId, setEmployeeId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,16 +37,60 @@ export const OrganizerRegisterPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    const nameCheck = validateName(name, 'Full name');
+    if (!nameCheck.isValid) {
+      setErrorMessage(nameCheck.message);
+      return;
+    }
+
+    const orgCheck = validateText(organizationName, 'Organization name', 2, 150, true);
+    if (!orgCheck.isValid) {
+      setErrorMessage(orgCheck.message);
+      return;
+    }
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      setErrorMessage(emailCheck.message);
+      return;
+    }
+
+    const pwdCheck = validatePassword(password, true);
+    if (!pwdCheck.isValid) {
+      setErrorMessage(pwdCheck.message);
+      return;
+    }
+
+    const phoneCheck = validatePhone(phone, false);
+    if (!phoneCheck.isValid) {
+      setErrorMessage(phoneCheck.message);
+      return;
+    }
+
+    const deptCheck = validateText(department, 'Department', 0, 100, false);
+    if (!deptCheck.isValid) {
+      setErrorMessage(deptCheck.message);
+      return;
+    }
+
+    const empCheck = validateText(employeeId, 'Employee ID', 0, 50, false);
+    if (!empCheck.isValid) {
+      setErrorMessage(empCheck.message);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       await registerOrganizer({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        organizationName: organizationName.trim(),
-        department,
-        employeeId: employeeId.trim(),
+        name: nameCheck.normalized,
+        email: emailCheck.normalized,
+        password: pwdCheck.normalized,
+        organizationName: orgCheck.normalized,
+        department: deptCheck.normalized,
+        employeeId: empCheck.normalized,
+        phone: phoneCheck.normalized,
       });
       navigate('/organizer/dashboard');
     } catch (err: any) {
@@ -86,6 +139,7 @@ export const OrganizerRegisterPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  maxLength={100}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Dr. Sarah Mitchell"
@@ -103,6 +157,7 @@ export const OrganizerRegisterPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  maxLength={150}
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
                   placeholder="ACM Student Chapter & Coding Club"
@@ -121,6 +176,7 @@ export const OrganizerRegisterPage: React.FC = () => {
                   <input
                     type="email"
                     required
+                    maxLength={254}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="club@college.edu"
@@ -131,20 +187,54 @@ export const OrganizerRegisterPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Password
+                  Password (min 8 chars)
                 </label>
                 <div className="mt-1.5 relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
+                    maxLength={128}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Contact Mobile (Optional)
+                </label>
+                <div className="mt-1.5 relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="tel"
+                    maxLength={25}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 9876543210"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Employee / Coordinator ID
+                </label>
+                <input
+                  type="text"
+                  maxLength={50}
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  placeholder="FAC-2024-88"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 px-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
+                />
               </div>
             </div>
 
@@ -154,6 +244,7 @@ export const OrganizerRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                maxLength={100}
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 placeholder="Computer Science & Engineering"
