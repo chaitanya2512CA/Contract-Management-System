@@ -135,17 +135,32 @@ export const ensureDemoAccounts = async () => {
     bio: 'Oversees platform advocate verification, commission distribution, compliance auditing, and disputes.'
   });
 
-  // Also support legacy admin email if set in .env
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_EMAIL !== 'admin@contractiq.com') {
-    await ensureUser({
-      name: process.env.ADMIN_NAME || 'Campus Administrator',
-      email: process.env.ADMIN_EMAIL,
-      password: process.env.ADMIN_PASSWORD || 'Admin@12345',
-      role: 'admin',
-      phone: '+1 555-0199',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300'
-    });
-  }
+  // Support legacy demo accounts for test suite compatibility
+  await ensureUser({
+    name: process.env.ADMIN_NAME || 'Chief Campus Administrator',
+    email: 'admin@college.edu',
+    password: 'Admin@12345',
+    role: 'admin',
+    phone: '+1 555-0199',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300'
+  });
+  await ensureUser({
+    name: 'Priya Sharma (Student Demo)',
+    email: 'student@college.edu',
+    password: 'Student@12345',
+    role: 'student',
+    phone: '+1 555-0101',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'
+  });
+  await ensureUser({
+    name: 'Dr. Vikramaditya (Organizer Demo)',
+    email: 'organizer@college.edu',
+    password: 'Organizer@12345',
+    role: 'organizer',
+    phone: '+1 555-0202',
+    company: 'ACM Student Chapter',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300'
+  });
 
   // 2. Individual Client
   const clientId = await ensureUser({

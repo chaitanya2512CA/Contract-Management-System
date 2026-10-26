@@ -33,6 +33,48 @@ const sendAuthResponse = (user, statusCode, res, message = 'Authenticated succes
   });
 };
 
+// Centralized authentication and registration error handler
+export const handleAuthError = (res, error, operation = 'Authentication') => {
+  console.error(`[Auth Diagnostic] ${operation} error:`, {
+    code: error.code,
+    routine: error.routine,
+    message: error.message,
+    name: error.name,
+    stack: error.stack,
+  });
+
+  if (error.code === '23505') {
+    return res.status(409).json({
+      success: false,
+      message: 'An account with this email address already exists. Please sign in.',
+    });
+  }
+
+  const isTlsOrConnError =
+    error.code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+    error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+    error.code === 'CERT_HAS_EXPIRED' ||
+    error.code === 'ECONNREFUSED' ||
+    error.code === 'ETIMEDOUT' ||
+    error.code === 'EAI_AGAIN' ||
+    error.code === 'ENOTFOUND' ||
+    error.message?.includes('certificate') ||
+    error.message?.includes('connection') ||
+    error.message?.includes('DATABASE_URL');
+
+  if (isTlsOrConnError) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database service is temporarily unavailable or requires verified SSL certificate configuration. Please check database connectivity.',
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message: `${operation} failed. Please try again.`,
+  });
+};
+
 /**
  * Student Registration
  */
@@ -109,10 +151,7 @@ export const registerStudent = async (req, res) => {
         message: 'An account with this email address already exists. Please sign in.',
       });
     }
-    console.error('Error in registerStudent:', error);
-    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
-    const statusCode = isConnError ? 503 : 500;
-    res.status(statusCode).json({ success: false, message: error.message || 'Server error during registration.' });
+    return handleAuthError(res, error, 'Student registration');
   }
 };
 
@@ -192,8 +231,7 @@ export const registerOrganizer = async (req, res) => {
     if (error.code === '23505') {
       return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
     }
-    console.error('Error in registerOrganizer:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
+    return handleAuthError(res, error, 'Organizer registration');
   }
 };
 
@@ -257,10 +295,7 @@ export const loginStudent = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Welcome back to CampusPulse!');
   } catch (error) {
-    console.error('Error in loginStudent:', error);
-    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
-    const statusCode = isConnError ? 503 : 500;
-    res.status(statusCode).json({ success: false, message: error.message || 'Server error during login.' });
+    return handleAuthError(res, error, 'Student login');
   }
 };
 
@@ -323,8 +358,7 @@ export const loginOrganizer = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Organizer portal authentication successful.');
   } catch (error) {
-    console.error('Error in loginOrganizer:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
+    return handleAuthError(res, error, 'Organizer login');
   }
 };
 
@@ -400,8 +434,7 @@ export const loginAdmin = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Administrator portal authentication successful.');
   } catch (error) {
-    console.error('Error in loginAdmin:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during admin login.' });
+    return handleAuthError(res, error, 'Administrator login');
   }
 };
 
@@ -631,8 +664,7 @@ export const login = async (req, res) => {
 
     sendAuthResponse(user, 200, res, 'Logged in successfully.');
   } catch (error) {
-    console.error('Error in login:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
+    return handleAuthError(res, error, 'Universal login');
   }
 };
 
@@ -737,7 +769,6 @@ export const register = async (req, res) => {
 
     sendAuthResponse(user, 201, res, 'Account registered successfully.');
   } catch (error) {
-    console.error('Error in register:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
+    return handleAuthError(res, error, 'Universal registration');
   }
 };

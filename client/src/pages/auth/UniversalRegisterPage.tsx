@@ -53,7 +53,13 @@ export const UniversalRegisterPage: React.FC = () => {
         navigate('/client/dashboard');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setError('Unable to reach the authentication server. Please check your network connection.');
+      } else {
+        setError('Registration failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

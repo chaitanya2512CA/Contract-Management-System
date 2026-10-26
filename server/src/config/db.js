@@ -4,7 +4,9 @@ dotenv.config();
 import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
+import tls from 'tls';
 import { fileURLToPath } from 'url';
+import { parse as parseConnectionString } from 'pg-connection-string';
 import { SCHEMA_SQL } from './schema.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,8 +15,70 @@ const __dirname = path.dirname(__filename);
 const { Pool } = pg;
 
 /**
- * Dynamic Neon PostgreSQL connection string resolver
- * Resolves standard Neon & Vercel environment variables dynamically
+ * Returns the complete chain of trusted CA certificates for strict TLS verification.
+ * Combines Node's built-in Mozilla Root CAs, Supabase's official Root/Intermediate CAs,
+ * and any custom/corporate proxy CAs supplied via NODE_EXTRA_CA_CERTS or certs directory.
+ * Strictly adheres to TLS certificate verification without bypassing security.
+ */
+export const getTrustedCACertificates = () => {
+  const certs = new Set();
+
+  // 1. Built-in Mozilla Root CAs from Node.js runtime
+  if (Array.isArray(tls.rootCertificates)) {
+    for (const cert of tls.rootCertificates) {
+      certs.add(cert);
+    }
+  }
+
+  // 2. Official Supabase Root and Intermediate CAs (prod-ca-2021)
+  try {
+    const supabaseCertPath = path.join(__dirname, 'certs', 'supabase-ca.pem');
+    if (fs.existsSync(supabaseCertPath)) {
+      const content = fs.readFileSync(supabaseCertPath, 'utf8');
+      const blocks = content.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+      if (blocks) {
+        for (const b of blocks) certs.add(b.trim());
+      }
+    }
+  } catch (_) {}
+
+  // 3. User, Corporate, or Proxy custom CA paths (NODE_EXTRA_CA_CERTS, SSL_CERT_FILE, or project certs)
+  const candidatePaths = [
+    process.env.NODE_EXTRA_CA_CERTS,
+    process.env.SSL_CERT_FILE,
+    process.env.DATABASE_CA_CERT_PATH,
+    path.join(process.cwd(), 'certs', 'ca.crt'),
+    path.join(process.cwd(), 'certs', 'ca-bundle.crt'),
+    path.join(process.cwd(), 'ca.crt'),
+  ].filter(Boolean);
+
+  for (const p of candidatePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf8');
+        const blocks = content.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+        if (blocks) {
+          for (const b of blocks) certs.add(b.trim());
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 4. Raw inline CA passed via DATABASE_CA_CERT or SSL_CERT_DATA
+  const inlineCA = process.env.DATABASE_CA_CERT || process.env.SSL_CERT_DATA;
+  if (inlineCA) {
+    const blocks = inlineCA.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+    if (blocks) {
+      for (const b of blocks) certs.add(b.trim());
+    }
+  }
+
+  return Array.from(certs);
+};
+
+/**
+ * Dynamic PostgreSQL connection string resolver
+ * Resolves standard Supabase, Neon, and Vercel environment variables dynamically
  */
 export const getConnectionString = () => {
   return (
@@ -114,7 +178,7 @@ export const getSafeDatabaseInfo = async () => {
   let hostMasked = 'none';
   if (connStr) {
     try {
-      const parsed = new URL(connStr.replace(/^postgres:/, 'http:'));
+      const parsed = new URL(connStr.replace(/^postgres(ql)?:/, 'http:'));
       const host = parsed.hostname;
       if (host.length > 8) {
         hostMasked = `${host.slice(0, 3)}***${host.slice(-4)}`;
@@ -181,7 +245,7 @@ export const getSafeDatabaseInfo = async () => {
 };
 
 /**
- * Initialize schema tables and indexes in Neon PostgreSQL
+ * Initialize schema tables and indexes in PostgreSQL
  */
 export const initSchema = async () => {
   if (isSchemaInitialized) return true;
@@ -203,7 +267,7 @@ export const initSchema = async () => {
       }
     }
 
-    // Safe progressive non-destructive migrations for existing Neon database instances
+    // Safe progressive non-destructive migrations for existing database instances
     const migrations = [
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id VARCHAR(50) DEFAULT '';`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id VARCHAR(50) DEFAULT '';`,
@@ -227,7 +291,7 @@ export const initSchema = async () => {
       `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 200);`,
       `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_msg_len CHECK (length(message) <= 2000);`,
       `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`,
-      // Safe targeted cleanup of legacy sample / seed events from Neon PostgreSQL
+      // Safe targeted cleanup of legacy sample / seed events from PostgreSQL
       `DELETE FROM events WHERE title IN (
         'AI Horizon 2026: 36-Hour National Hackathon',
         'Mastering Cloud-Native Microservices with Kubernetes',
@@ -247,7 +311,7 @@ export const initSchema = async () => {
       }
     }
 
-    console.log('[DB] Neon PostgreSQL schema verified & initialized successfully.');
+    console.log('[DB] PostgreSQL schema verified & initialized successfully.');
     isSchemaInitialized = true;
     isReady = true;
     return true;
@@ -269,33 +333,57 @@ export const connectDB = async () => {
 
   if (connStr) {
     try {
-      console.log('[DB] Initializing Neon PostgreSQL pool connection...');
-      const isSsl = !connStr.includes('localhost') && !connStr.includes('127.0.0.1');
-      const newPool = new Pool({
-        connectionString: connStr,
-        ssl: isSsl ? { rejectUnauthorized: false } : false,
+      console.log('[DB] Initializing PostgreSQL connection pool with strict TLS verification...');
+      const parsed = parseConnectionString(connStr);
+      const isLocal =
+        !parsed.host ||
+        parsed.host === 'localhost' ||
+        parsed.host === '127.0.0.1' ||
+        connStr.includes('sslmode=disable');
+
+      const poolConfig = {
+        user: parsed.user,
+        password: parsed.password,
+        host: parsed.host,
+        port: parsed.port ? parseInt(parsed.port, 10) : 5432,
+        database: parsed.database,
         max: isVercel ? 3 : 10,
         idleTimeoutMillis: 15000,
         connectionTimeoutMillis: 10000,
-      });
+      };
+
+      if (!isLocal) {
+        // Strict TLS verification: validate server identity against trusted root & intermediate CAs
+        // Never disable certificate validation; enforce rejectUnauthorized: true
+        const trustedCAs = getTrustedCACertificates();
+        poolConfig.ssl = {
+          rejectUnauthorized: true,
+          ca: trustedCAs,
+          servername: parsed.host,
+        };
+      } else {
+        poolConfig.ssl = false;
+      }
+
+      const newPool = new Pool(poolConfig);
 
       const client = await newPool.connect();
       const res = await client.query('SELECT NOW() as server_time, current_database() as db_name');
       client.release();
 
       setActivePool(newPool);
-      console.log(`[DB] Connected to Neon PostgreSQL [${res.rows[0].db_name}] at ${res.rows[0].server_time}`);
+      console.log(`[DB] Connected securely to PostgreSQL [${res.rows[0].db_name}] at ${res.rows[0].server_time}`);
       await initSchema();
       isReady = true;
     } catch (err) {
-      console.error(`[DB] Neon PostgreSQL connection failed: ${err.message}`);
+      console.error(`[DB] PostgreSQL connection failed: ${err.message}`);
       isReady = false;
       throw err;
     }
   } else {
     // In production or Vercel, NEVER silently switch to memory DB
     if (isVercel || isProduction) {
-      const errorMsg = '[DB] Neon PostgreSQL connection string not found. Please add DATABASE_URL or POSTGRES_URL to your Vercel Project Environment Variables.';
+      const errorMsg = '[DB] PostgreSQL connection string not found. Please add DATABASE_URL or POSTGRES_URL to your Vercel Project Environment Variables.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -520,4 +608,3 @@ export const mapNotification = (row) => {
     createdAt: row.created_at,
   };
 };
-
