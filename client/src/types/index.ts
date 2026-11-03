@@ -1,4 +1,4 @@
-export type UserRole = 'client' | 'lawyer' | 'business' | 'admin' | 'student' | 'organizer';
+export type UserRole = 'client' | 'lawyer' | 'business' | 'admin' | 'legal' | 'sales' | 'finance' | 'procurement' | 'hr' | 'student' | 'organizer';
 
 export type LawyerSpecialty =
   | 'Criminal Lawyer'

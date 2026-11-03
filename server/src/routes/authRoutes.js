@@ -7,6 +7,7 @@ import {
   loginAdmin,
   login,
   register,
+  supabaseSync,
   getMe,
   updateProfile,
   changePassword,
@@ -20,6 +21,7 @@ const router = express.Router();
 // Universal ContractIQ Authentication
 router.post('/login', authLimiter, login);
 router.post('/register', authLimiter, register);
+router.post('/supabase-sync', authLimiter, supabaseSync);
 
 // Legacy Collegiate Portals
 router.post('/student/register', authLimiter, registerStudent);

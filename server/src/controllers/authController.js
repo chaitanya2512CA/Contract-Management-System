@@ -1,3 +1,4 @@
+import { verifySupabaseToken } from '../config/supabase.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -718,6 +719,15 @@ export const register = async (req, res) => {
       [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
     );
 
+    try {
+      await query(
+        `INSERT INTO profiles (id, email, full_name, role, phone, company_name, city, state, bio, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`,
+        [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
+      );
+    } catch (_) {}
+
     let lawyerProfile = null;
     if (assignedRole === 'lawyer') {
       const profileId = crypto.randomUUID();
@@ -770,5 +780,53 @@ export const register = async (req, res) => {
     sendAuthResponse(user, 201, res, 'Account registered successfully.');
   } catch (error) {
     return handleAuthError(res, error, 'Universal registration');
+  }
+};
+
+/**
+ * Supabase Auth Session Synchronization
+ * Syncs Supabase user credentials & profile into PostgreSQL backend
+ */
+export const supabaseSync = async (req, res) => {
+  try {
+    const { supabaseToken, role, metadata } = req.body;
+    let authUser = null;
+    if (supabaseToken) {
+      authUser = await verifySupabaseToken(supabaseToken);
+    }
+    if (!authUser && req.user) {
+      authUser = { id: req.user.id, email: req.user.email, user_metadata: metadata || {} };
+    }
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: 'Invalid or missing Supabase session.' });
+    }
+
+    const email = authUser.email.toLowerCase();
+    const name = authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0];
+    const userRole = role || authUser.user_metadata?.role || 'client';
+
+    let userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
+    if (userRes.rows.length === 0) {
+      const newId = authUser.id || crypto.randomUUID();
+      await query(
+        `INSERT INTO users (id, name, email, role, phone, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)`,
+        [newId, name, email, userRole, authUser.user_metadata?.phone || '']
+      );
+      try {
+        await query(
+          `INSERT INTO profiles (id, auth_user_id, email, full_name, role, phone)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name`,
+          [newId, authUser.id, email, name, userRole, authUser.user_metadata?.phone || '']
+        );
+      } catch (_) {}
+      userRes = await query('SELECT * FROM users WHERE id = $1', [newId]);
+    }
+
+    const user = mapUser(userRes.rows[0]);
+    sendAuthResponse(user, 200, res, 'Supabase session synchronized successfully.');
+  } catch (error) {
+    return handleAuthError(res, error, 'Supabase session synchronization');
   }
 };

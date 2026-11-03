@@ -1,6 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { query, mapUser } from '../config/db.js';
+import { verifySupabaseToken } from '../config/supabase.js';
 
+/**
+ * Universal Protection Middleware:
+ * Supports both ContractIQ custom JWT tokens and native Supabase Auth access tokens.
+ */
 export const protect = async (req, res, next) => {
   try {
     let token;
@@ -18,12 +23,68 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'super_secret_college_event_hub_jwt_key_2026_secured'
-    );
+    let userId = null;
+    let userEmail = null;
 
-    const userRes = await query('SELECT * FROM users WHERE id = $1', [decoded.id]);
+    // 1. Attempt verification with internal ContractIQ JWT secret
+    try {
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'super_secret_college_event_hub_jwt_key_2026_secured'
+      );
+      userId = decoded.id;
+    } catch (jwtErr) {
+      // 2. If internal JWT fails, attempt Supabase Auth validation
+      try {
+        const supabaseUser = await verifySupabaseToken(token);
+        if (supabaseUser) {
+          userId = supabaseUser.id;
+          userEmail = supabaseUser.email;
+        } else {
+          // Alternatively decode unverified for claims inspection if service key is offline
+          const unverified = jwt.decode(token);
+          if (unverified && (unverified.sub || unverified.email) && unverified.iss?.includes('supabase')) {
+            userId = unverified.sub;
+            userEmail = unverified.email;
+          }
+        }
+      } catch (sbErr) {
+        // Fall through to invalid session
+      }
+    }
+
+    if (!userId && !userEmail) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired session. Please log in again.',
+      });
+    }
+
+    // 3. Resolve user record from PostgreSQL
+    let userRes;
+    if (userId && userEmail) {
+      userRes = await query(
+        'SELECT * FROM users WHERE id = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
+        [userId, userEmail]
+      );
+    } else if (userId) {
+      userRes = await query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
+    } else {
+      userRes = await query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [userEmail]);
+    }
+
+    // 4. Auto-provision profile/user from Supabase Auth if record doesn't exist yet
+    if (userRes.rows.length === 0 && userEmail) {
+      const newId = userId || crypto.randomUUID();
+      await query(
+        `INSERT INTO users (id, name, email, role, is_active)
+         VALUES ($1, $2, $3, 'client', true)
+         ON CONFLICT (email) DO UPDATE SET is_active = true
+         RETURNING *`,
+        [newId, userEmail.split('@')[0], userEmail.toLowerCase()]
+      );
+      userRes = await query('SELECT * FROM users WHERE id = $1 OR LOWER(email) = LOWER($2) LIMIT 1', [newId, userEmail]);
+    }
 
     if (userRes.rows.length === 0) {
       return res.status(401).json({
@@ -37,7 +98,7 @@ export const protect = async (req, res, next) => {
     if (!currentUser.isActive) {
       return res.status(403).json({
         success: false,
-        message: 'Your account has been deactivated. Please contact campus administration.',
+        message: 'Your account has been deactivated. Please contact administration.',
       });
     }
 
@@ -77,7 +138,7 @@ export const requireRole = (role) => {
 
 /**
  * Enforce any of the given roles
- * e.g. requireAnyRole(['organizer', 'admin'])
+ * e.g. requireAnyRole(['lawyer', 'admin'])
  */
 export const requireAnyRole = (roles) => {
   return (req, res, next) => {
@@ -98,3 +159,5 @@ export const requireAnyRole = (roles) => {
     next();
   };
 };
+
+export default { protect, requireRole, requireAnyRole };

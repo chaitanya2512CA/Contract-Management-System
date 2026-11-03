@@ -1,13 +1,34 @@
 -- ContractIQ & Enterprise Legal Ecosystem Database Schema
--- Compatible with PostgreSQL 14+, Neon PostgreSQL, and local pg-mem engine
+-- Compatible with PostgreSQL 14+, Supabase, Neon PostgreSQL, and local pg-mem engine
 
--- 1. Unified Users Table
+-- 1. Profiles (Unified User Profile synced with auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+  id VARCHAR(36) PRIMARY KEY,
+  auth_user_id VARCHAR(36) UNIQUE,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  full_name VARCHAR(150) NOT NULL,
+  role VARCHAR(30) NOT NULL CHECK (role IN ('client', 'lawyer', 'business', 'admin', 'legal', 'sales', 'finance', 'procurement', 'hr', 'student', 'organizer')) DEFAULT 'client',
+  phone VARCHAR(30) DEFAULT '',
+  avatar_url TEXT DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+  bio TEXT DEFAULT '',
+  company_name VARCHAR(150) DEFAULT '',
+  department VARCHAR(100) DEFAULT 'General',
+  city VARCHAR(100) DEFAULT '',
+  state VARCHAR(100) DEFAULT '',
+  is_active BOOLEAN DEFAULT true,
+  last_login TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Unified Users Table
 CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(36) PRIMARY KEY,
   name VARCHAR(150) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('client', 'lawyer', 'business', 'admin', 'student', 'organizer')) DEFAULT 'client',
+  role VARCHAR(30) NOT NULL CHECK (role IN ('client', 'lawyer', 'business', 'admin', 'legal', 'sales', 'finance', 'procurement', 'hr', 'student', 'organizer')) DEFAULT 'client',
   phone VARCHAR(30) DEFAULT '',
   avatar TEXT DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
   bio TEXT DEFAULT '',
@@ -19,7 +40,7 @@ CREATE TABLE IF NOT EXISTS users (
   admin_id VARCHAR(50) DEFAULT '',
   department VARCHAR(100) DEFAULT 'General',
   graduation_year INT DEFAULT 2026,
-  interests JSONB DEFAULT '["Technology", "Legal Tech"]'::jsonb,
+  interests JSONB DEFAULT '["Technology", "Legal Tech"]',
   organization_name VARCHAR(150) DEFAULT '',
   is_active BOOLEAN DEFAULT true,
   last_login TIMESTAMPTZ DEFAULT NOW(),
@@ -27,23 +48,45 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Lawyer Professional Profiles
+-- 3. User Roles
+CREATE TABLE IF NOT EXISTS user_roles (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES profiles(id) ON DELETE CASCADE,
+  role VARCHAR(30) NOT NULL,
+  permissions JSONB DEFAULT '[]',
+  assigned_by VARCHAR(36),
+  assigned_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Lawyer Categories
+CREATE TABLE IF NOT EXISTS lawyer_categories (
+  id VARCHAR(36) PRIMARY KEY,
+  name VARCHAR(100) UNIQUE NOT NULL,
+  slug VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT DEFAULT '',
+  icon VARCHAR(50) DEFAULT 'Scale',
+  is_active BOOLEAN DEFAULT true,
+  display_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Lawyer Professional Profiles
 CREATE TABLE IF NOT EXISTS lawyer_profiles (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE UNIQUE,
   full_name VARCHAR(150) NOT NULL,
   headline VARCHAR(255) DEFAULT '',
   primary_specialty VARCHAR(100) NOT NULL,
-  additional_specialties JSONB DEFAULT '[]'::jsonb,
+  additional_specialties JSONB DEFAULT '[]',
   experience_years INT NOT NULL DEFAULT 3,
   bar_council_number VARCHAR(100) DEFAULT '',
   bar_state VARCHAR(100) DEFAULT '',
-  languages JSONB DEFAULT '["English", "Hindi"]'::jsonb,
-  education JSONB DEFAULT '[]'::jsonb,
+  languages JSONB DEFAULT '["English", "Hindi"]',
+  education JSONB DEFAULT '[]',
   consultation_fee_15 NUMERIC(10, 2) DEFAULT 499.00,
   consultation_fee_30 NUMERIC(10, 2) DEFAULT 899.00,
   consultation_fee_60 NUMERIC(10, 2) DEFAULT 1499.00,
-  consultation_modes JSONB DEFAULT '["chat", "audio", "video"]'::jsonb,
+  consultation_modes JSONB DEFAULT '["chat", "audio", "video"]',
   is_instant_booking BOOLEAN DEFAULT true,
   is_verified BOOLEAN DEFAULT false,
   verification_status VARCHAR(25) DEFAULT 'unverified' CHECK (verification_status IN ('unverified', 'pending', 'verified', 'rejected')),
@@ -61,7 +104,33 @@ CREATE TABLE IF NOT EXISTS lawyer_profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Advocate Verification Applications
+-- 6. Lawyer Specializations
+CREATE TABLE IF NOT EXISTS lawyer_specializations (
+  id VARCHAR(36) PRIMARY KEY,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  category_name VARCHAR(100) NOT NULL,
+  sub_specialty VARCHAR(100) DEFAULT '',
+  years_practicing INT DEFAULT 1,
+  is_primary BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Lawyer Documents
+CREATE TABLE IF NOT EXISTS lawyer_documents (
+  id VARCHAR(36) PRIMARY KEY,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  doc_type VARCHAR(50) NOT NULL CHECK (doc_type IN ('bar_certificate', 'id_proof', 'degree', 'practice_license', 'other')),
+  title VARCHAR(200) NOT NULL,
+  file_url TEXT NOT NULL,
+  file_size BIGINT DEFAULT 0,
+  mime_type VARCHAR(100) DEFAULT 'application/pdf',
+  verification_status VARCHAR(25) DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+  verified_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. Lawyer Verifications
 CREATE TABLE IF NOT EXISTS lawyer_verifications (
   id VARCHAR(36) PRIMARY KEY,
   lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
@@ -78,7 +147,7 @@ CREATE TABLE IF NOT EXISTS lawyer_verifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Availability Schedules for Consultations
+-- 9. Availability Schedules & Lawyer Availability
 CREATE TABLE IF NOT EXISTS availability_schedules (
   id VARCHAR(36) PRIMARY KEY,
   lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
@@ -90,7 +159,18 @@ CREATE TABLE IF NOT EXISTS availability_schedules (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Consultation Bookings (Astrotalk-style flow)
+CREATE TABLE IF NOT EXISTS lawyer_availability (
+  id VARCHAR(36) PRIMARY KEY,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  start_time VARCHAR(10) NOT NULL DEFAULT '09:00',
+  end_time VARCHAR(10) NOT NULL DEFAULT '18:00',
+  is_active BOOLEAN DEFAULT true,
+  slot_duration_minutes INT DEFAULT 30,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. Consultation Bookings
 CREATE TABLE IF NOT EXISTS consultation_bookings (
   id VARCHAR(36) PRIMARY KEY,
   booking_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -107,9 +187,9 @@ CREATE TABLE IF NOT EXISTS consultation_bookings (
   status VARCHAR(25) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'confirmed', 'in_progress', 'completed', 'cancelled')),
   legal_issue_description TEXT NOT NULL,
   urgency VARCHAR(20) DEFAULT 'medium' CHECK (urgency IN ('low', 'medium', 'high', 'emergency')),
-  client_documents JSONB DEFAULT '[]'::jsonb,
+  client_documents JSONB DEFAULT '[]',
   meeting_room_id VARCHAR(100) DEFAULT '',
-  meeting_credentials JSONB DEFAULT '{}'::jsonb,
+  meeting_credentials JSONB DEFAULT '{}',
   lawyer_notes TEXT DEFAULT '',
   rejection_reason TEXT DEFAULT '',
   cancelled_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
@@ -119,13 +199,37 @@ CREATE TABLE IF NOT EXISTS consultation_bookings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Chat Conversations & Real-Time Messaging
+-- 11. Consultation Sessions
+CREATE TABLE IF NOT EXISTS consultation_sessions (
+  id VARCHAR(36) PRIMARY KEY,
+  booking_id VARCHAR(36) REFERENCES consultation_bookings(id) ON DELETE CASCADE,
+  room_token TEXT DEFAULT '',
+  channel_name VARCHAR(100) DEFAULT '',
+  session_started_at TIMESTAMPTZ DEFAULT NOW(),
+  session_ended_at TIMESTAMPTZ DEFAULT NULL,
+  duration_seconds INT DEFAULT 0,
+  recording_url TEXT DEFAULT '',
+  transcript_url TEXT DEFAULT '',
+  quality_rating INT DEFAULT 5,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. Chat Conversations & Real-Time Messaging
 CREATE TABLE IF NOT EXISTS conversations (
   id VARCHAR(36) PRIMARY KEY,
   booking_id VARCHAR(36) REFERENCES consultation_bookings(id) ON DELETE CASCADE,
   client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
   lawyer_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS conversation_participants (
+  id VARCHAR(36) PRIMARY KEY,
+  conversation_id VARCHAR(36) REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  role VARCHAR(50) DEFAULT 'participant',
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  last_read_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -143,7 +247,7 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. Contract Lifecycle Management (CLM)
+-- 13. Contract Lifecycle Management (CLM)
 CREATE TABLE IF NOT EXISTS contracts (
   id VARCHAR(36) PRIMARY KEY,
   contract_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -163,11 +267,22 @@ CREATE TABLE IF NOT EXISTS contracts (
   currency VARCHAR(10) DEFAULT 'INR',
   ai_risk_score INT DEFAULT NULL,
   ai_summary TEXT DEFAULT '',
-  ai_risk_flags JSONB DEFAULT '[]'::jsonb,
-  ai_clause_suggestions JSONB DEFAULT '[]'::jsonb,
+  ai_risk_flags JSONB DEFAULT '[]',
+  ai_clause_suggestions JSONB DEFAULT '[]',
   ai_analyzed_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS contract_parties (
+  id VARCHAR(36) PRIMARY KEY,
+  contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
+  party_name VARCHAR(150) NOT NULL,
+  party_type VARCHAR(50) DEFAULT 'counterparty' CHECK (party_type IN ('internal', 'client', 'vendor', 'counterparty')),
+  contact_email VARCHAR(255) NOT NULL,
+  role VARCHAR(50) DEFAULT 'reviewer' CHECK (role IN ('drafter', 'reviewer', 'approver', 'signatory', 'viewer')),
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS contract_versions (
@@ -176,7 +291,20 @@ CREATE TABLE IF NOT EXISTS contract_versions (
   version_number INT NOT NULL,
   content_text TEXT NOT NULL,
   change_summary TEXT DEFAULT '',
+  file_url TEXT DEFAULT '',
   created_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS contract_clauses (
+  id VARCHAR(36) PRIMARY KEY,
+  contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
+  clause_type VARCHAR(50) NOT NULL,
+  clause_title VARCHAR(150) NOT NULL,
+  clause_text TEXT NOT NULL,
+  standard_language TEXT DEFAULT '',
+  risk_level VARCHAR(20) DEFAULT 'low',
+  ai_suggestion TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -192,6 +320,16 @@ CREATE TABLE IF NOT EXISTS contract_approvals (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS contract_comments (
+  id VARCHAR(36) PRIMARY KEY,
+  contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
+  author_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  comment_text TEXT NOT NULL,
+  clause_reference VARCHAR(150) DEFAULT '',
+  is_resolved BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS contract_signatures (
   id VARCHAR(36) PRIMARY KEY,
   contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
@@ -199,8 +337,32 @@ CREATE TABLE IF NOT EXISTS contract_signatures (
   signer_email VARCHAR(255) NOT NULL,
   signer_role VARCHAR(50) DEFAULT 'Party',
   signature_data TEXT DEFAULT '',
+  certificate_hash VARCHAR(255) DEFAULT '',
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'signed', 'declined')),
   signed_at TIMESTAMPTZ DEFAULT NULL,
+  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS contract_reminders (
+  id VARCHAR(36) PRIMARY KEY,
+  contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
+  reminder_type VARCHAR(50) NOT NULL,
+  reminder_date DATE NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  description TEXT DEFAULT '',
+  recipients JSONB DEFAULT '[]',
+  is_sent BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS contract_activity_logs (
+  id VARCHAR(36) PRIMARY KEY,
+  contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE CASCADE,
+  actor_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(100) NOT NULL,
+  description TEXT DEFAULT '',
+  metadata JSONB DEFAULT '{}',
   ip_address VARCHAR(50) DEFAULT '127.0.0.1',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -218,7 +380,7 @@ CREATE TABLE IF NOT EXISTS shared_document_permissions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. Legal Case Management
+-- 14. Legal Cases & Client Cases
 CREATE TABLE IF NOT EXISTS legal_cases (
   id VARCHAR(36) PRIMARY KEY,
   case_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -233,12 +395,23 @@ CREATE TABLE IF NOT EXISTS legal_cases (
   case_number VARCHAR(100) DEFAULT '',
   next_hearing_date DATE DEFAULT NULL,
   summary TEXT DEFAULT '',
-  chronology JSONB DEFAULT '[]'::jsonb,
+  chronology JSONB DEFAULT '[]',
   private_lawyer_notes TEXT DEFAULT '',
   client_notes TEXT DEFAULT '',
   related_contract_id VARCHAR(36) REFERENCES contracts(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS client_cases (
+  id VARCHAR(36) PRIMARY KEY,
+  case_ref VARCHAR(50) UNIQUE NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  practice_area VARCHAR(100) NOT NULL,
+  client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  assigned_lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  status VARCHAR(30) DEFAULT 'enquiry',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS case_documents (
@@ -254,14 +427,45 @@ CREATE TABLE IF NOT EXISTS case_documents (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. Legal Services Marketplace
+-- 15. Reviews
+CREATE TABLE IF NOT EXISTS client_reviews (
+  id VARCHAR(36) PRIMARY KEY,
+  booking_id VARCHAR(36) REFERENCES consultation_bookings(id) ON DELETE CASCADE UNIQUE,
+  client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  review_text TEXT DEFAULT '',
+  tags JSONB DEFAULT '[]',
+  is_public BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lawyer_reviews (
+  id VARCHAR(36) PRIMARY KEY,
+  booking_id VARCHAR(36) REFERENCES consultation_bookings(id) ON DELETE CASCADE UNIQUE,
+  client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  review_text TEXT DEFAULT '',
+  is_public BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lawyer_favorites (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 16. Legal Services Marketplace
 CREATE TABLE IF NOT EXISTS legal_services (
   id VARCHAR(36) PRIMARY KEY,
   lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
   title VARCHAR(200) NOT NULL,
   category VARCHAR(100) NOT NULL,
   description TEXT NOT NULL,
-  deliverables JSONB DEFAULT '[]'::jsonb,
+  deliverables JSONB DEFAULT '[]',
   price_amount NUMERIC(10, 2) NOT NULL,
   currency VARCHAR(10) DEFAULT 'INR',
   estimated_turnaround_days INT DEFAULT 3,
@@ -276,7 +480,7 @@ CREATE TABLE IF NOT EXISTS service_requests (
   client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
   lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
   requirements TEXT NOT NULL,
-  supporting_documents JSONB DEFAULT '[]'::jsonb,
+  supporting_documents JSONB DEFAULT '[]',
   quote_amount NUMERIC(10, 2) NOT NULL,
   status VARCHAR(25) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'in_progress', 'review_pending', 'completed', 'cancelled')),
   deliverable_file_url TEXT DEFAULT '',
@@ -285,7 +489,7 @@ CREATE TABLE IF NOT EXISTS service_requests (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. Financial Ledgers, Payments & Commissions
+-- 17. Payments
 CREATE TABLE IF NOT EXISTS payment_orders (
   id VARCHAR(36) PRIMARY KEY,
   order_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -300,6 +504,19 @@ CREATE TABLE IF NOT EXISTS payment_orders (
   receipt_number VARCHAR(100) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id VARCHAR(36) PRIMARY KEY,
+  payment_ref VARCHAR(50) UNIQUE NOT NULL,
+  order_id VARCHAR(36) REFERENCES payment_orders(id) ON DELETE SET NULL,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  amount_paise BIGINT NOT NULL,
+  currency VARCHAR(10) DEFAULT 'INR',
+  status VARCHAR(25) DEFAULT 'created' CHECK (status IN ('created', 'attempted', 'paid', 'failed')),
+  gateway_payment_id VARCHAR(100) DEFAULT '',
+  gateway_signature VARCHAR(255) DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS payment_transactions (
@@ -370,15 +587,45 @@ CREATE TABLE IF NOT EXISTS refunds (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS client_reviews (
+CREATE TABLE IF NOT EXISTS invoices (
   id VARCHAR(36) PRIMARY KEY,
-  booking_id VARCHAR(36) REFERENCES consultation_bookings(id) ON DELETE CASCADE UNIQUE,
-  client_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
-  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
-  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  review_text TEXT DEFAULT '',
-  tags JSONB DEFAULT '[]'::jsonb,
-  is_public BOOLEAN DEFAULT true,
+  invoice_number VARCHAR(50) UNIQUE NOT NULL,
+  order_id VARCHAR(36) REFERENCES payment_orders(id) ON DELETE SET NULL,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  recipient_name VARCHAR(150) NOT NULL,
+  recipient_email VARCHAR(255) NOT NULL,
+  recipient_address TEXT DEFAULT '',
+  subtotal NUMERIC(10, 2) NOT NULL,
+  tax_amount NUMERIC(10, 2) NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
+  currency VARCHAR(10) DEFAULT 'INR',
+  pdf_url TEXT DEFAULT '',
+  status VARCHAR(20) DEFAULT 'issued' CHECK (status IN ('issued', 'paid', 'cancelled')),
+  issued_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  admin_email VARCHAR(255) NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50) NOT NULL,
+  target_id VARCHAR(100) DEFAULT '',
+  details TEXT DEFAULT '',
+  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  admin_email VARCHAR(255) NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50) NOT NULL,
+  target_id VARCHAR(100) DEFAULT '',
+  details TEXT DEFAULT '',
+  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -389,7 +636,18 @@ CREATE TABLE IF NOT EXISTS platform_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Preserved Legacy Tables for complete backward-compatibility
+CREATE TABLE IF NOT EXISTS notifications (
+  id VARCHAR(36) PRIMARY KEY,
+  recipient_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  message TEXT NOT NULL,
+  type VARCHAR(50) DEFAULT 'general',
+  link TEXT DEFAULT '',
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Preserved Legacy Tables
 CREATE TABLE IF NOT EXISTS events (
   id VARCHAR(36) PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
@@ -412,7 +670,7 @@ CREATE TABLE IF NOT EXISTS events (
   is_paid BOOLEAN DEFAULT false,
   ticket_price NUMERIC(10, 2) DEFAULT 0,
   status VARCHAR(25) NOT NULL CHECK (status IN ('pending_approval', 'approved', 'rejected', 'cancelled', 'completed')) DEFAULT 'pending_approval',
-  tags JSONB DEFAULT '[]'::jsonb,
+  tags JSONB DEFAULT '[]',
   eligibility TEXT DEFAULT 'Open to all enrolled university students',
   prerequisites TEXT DEFAULT 'None',
   rejection_reason TEXT DEFAULT '',
@@ -474,48 +732,3 @@ CREATE TABLE IF NOT EXISTS announcements (
   priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('normal', 'important', 'urgent')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id VARCHAR(36) PRIMARY KEY,
-  user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
-  admin_email VARCHAR(255) NOT NULL,
-  action VARCHAR(100) NOT NULL,
-  target_type VARCHAR(50) NOT NULL,
-  target_id VARCHAR(100) DEFAULT '',
-  details TEXT DEFAULT '',
-  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id VARCHAR(36) PRIMARY KEY,
-  recipient_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
-  title VARCHAR(200) NOT NULL,
-  message TEXT NOT NULL,
-  type VARCHAR(50) DEFAULT 'general',
-  link TEXT DEFAULT '',
-  is_read BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Performance & Constraint Indexes
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-CREATE INDEX IF NOT EXISTS idx_lawyer_primary_specialty ON lawyer_profiles(primary_specialty);
-CREATE INDEX IF NOT EXISTS idx_lawyer_verified ON lawyer_profiles(is_verified);
-CREATE INDEX IF NOT EXISTS idx_consultation_client ON consultation_bookings(client_id);
-CREATE INDEX IF NOT EXISTS idx_consultation_lawyer ON consultation_bookings(lawyer_id);
-CREATE INDEX IF NOT EXISTS idx_consultation_status ON consultation_bookings(status);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_contracts_owner ON contracts(owner_id);
-CREATE INDEX IF NOT EXISTS idx_contracts_org ON contracts(organization_id);
-CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);
-CREATE INDEX IF NOT EXISTS idx_cases_client ON legal_cases(client_id);
-CREATE INDEX IF NOT EXISTS idx_cases_lawyer ON legal_cases(assigned_lawyer_id);
-CREATE INDEX IF NOT EXISTS idx_cases_status ON legal_cases(status);
-CREATE INDEX IF NOT EXISTS idx_orders_user ON payment_orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_rzp ON payment_orders(razorpay_order_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_rzp ON payment_transactions(razorpay_payment_id);
-CREATE INDEX IF NOT EXISTS idx_earnings_lawyer ON lawyer_earnings(lawyer_id);
-CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_id);
