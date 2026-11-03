@@ -121,7 +121,10 @@ export const StudentProfilePage: React.FC = () => {
     setIsChangingPass(true);
 
     try {
-      const res = await authService.changePassword({ currentPassword, newPassword: pwdCheck.normalized });
+      const res = await authService.changePassword({
+        currentPassword,
+        newPassword: pwdCheck.normalized || newPassword,
+      });
       setPassMessage({ text: res.data.message || 'Password changed successfully.', isError: false });
       setCurrentPassword('');
       setNewPassword('');

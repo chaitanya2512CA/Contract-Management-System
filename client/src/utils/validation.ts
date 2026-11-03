@@ -47,7 +47,7 @@ export const validateEmail = (email: string): ValidationResult => {
 };
 
 export const validatePassword = (password: string, isNew = true): ValidationResult => {
-  if (!password) {
+  if (!password || typeof password !== 'string' || password.length === 0) {
     return { isValid: false, message: 'Password is required.' };
   }
   if (isNew) {
@@ -62,7 +62,7 @@ export const validatePassword = (password: string, isNew = true): ValidationResu
       return { isValid: false, message: 'Password cannot exceed 128 characters.' };
     }
   }
-  return { isValid: true };
+  return { isValid: true, normalized: password };
 };
 
 export const validatePhone = (phone: string, required = false): ValidationResult => {

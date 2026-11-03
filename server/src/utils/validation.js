@@ -66,7 +66,7 @@ export const validateEmail = (email) => {
  * Never silently trims or truncates.
  */
 export const validatePassword = (password, isNew = true) => {
-  if (password === undefined || password === null || typeof password !== 'string') {
+  if (password === undefined || password === null || typeof password !== 'string' || password.length === 0) {
     return { isValid: false, message: 'Password is required.' };
   }
   if (isNew) {

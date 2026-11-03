@@ -491,6 +491,36 @@ async function runTests() {
     });
     assert(longEmailRes.status === 400, 'Test Case 6: Email > 254 chars rejected with 400 Bad Request');
 
+    // TEST CASE 6b: Missing or empty password rejected with "Password is required."
+    const emptyPwdRes1 = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Empty Pwd User',
+        email: `emptypwd1.${Date.now()}@college.edu`,
+        password: '',
+      }),
+    });
+    const emptyPwdData1 = await emptyPwdRes1.json();
+    assert(
+      emptyPwdRes1.status === 400 && emptyPwdData1.message === 'Password is required.',
+      'Test Case 6b: Empty string password rejected with "Password is required."'
+    );
+
+    const missingPwdRes2 = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Missing Pwd User',
+        email: `missingpwd2.${Date.now()}@college.edu`,
+      }),
+    });
+    const missingPwdData2 = await missingPwdRes2.json();
+    assert(
+      missingPwdRes2.status === 400 && missingPwdData2.message === 'Password is required.',
+      'Test Case 6c: Missing password property rejected with "Password is required."'
+    );
+
     // TEST CASE 7: Password < 8 chars
     const shortPwdRes = await fetch(`${BASE_URL}/auth/student/register`, {
       method: 'POST',
@@ -501,7 +531,56 @@ async function runTests() {
         password: 'pass1',
       }),
     });
-    assert(shortPwdRes.status === 400, 'Test Case 7: Password < 8 chars rejected with 400 Bad Request');
+    const shortPwdData = await shortPwdRes.json();
+    assert(
+      shortPwdRes.status === 400 && shortPwdData.message === 'Password must be between 8 and 128 characters.',
+      'Test Case 7: Password < 8 chars rejected with "Password must be between 8 and 128 characters."'
+    );
+
+    // TEST CASE 7b: Valid 8-character password succeeds
+    const eightCharEmail = `eightchar.${Date.now()}@college.edu`;
+    const eightCharPwd = 'P@ssw0rd';
+    const eightCharRes = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Eight Char User',
+        email: eightCharEmail,
+        password: eightCharPwd,
+        studentId: 'STU-8CHAR',
+      }),
+    });
+    assert(eightCharRes.status === 201, 'Test Case 7b: Valid 8-character password succeeds with 201 Created');
+
+    // TEST CASE 7c: Valid 12-character password with special characters and spaces succeeds
+    const specialPwdEmail = `specialpwd.${Date.now()}@college.edu`;
+    const specialPwd = 'My P@ssw0rd 2026!';
+    const specialPwdRes = await fetch(`${BASE_URL}/auth/student/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Special Pwd User',
+        email: specialPwdEmail,
+        password: specialPwd,
+        studentId: 'STU-SPECIAL',
+      }),
+    });
+    assert(specialPwdRes.status === 201, 'Test Case 7c: Valid 12+ char password with spaces and specials succeeds with 201 Created');
+
+    // TEST CASE 7d: User logs in using the registered password
+    const loginSpecialRes = await fetch(`${BASE_URL}/auth/student/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: specialPwdEmail,
+        password: specialPwd,
+      }),
+    });
+    const loginSpecialData = await loginSpecialRes.json();
+    assert(
+      loginSpecialRes.status === 200 && !!loginSpecialData.token,
+      'Test Case 7d: User authenticates successfully using newly registered password with special chars & spaces'
+    );
 
     // TEST CASE 8: Password > 128 chars
     const longPwdRes = await fetch(`${BASE_URL}/auth/student/register`, {
