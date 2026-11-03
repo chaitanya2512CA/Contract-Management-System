@@ -100,7 +100,7 @@ export const AdminEventApprovalsPage: React.FC = () => {
         <TableSkeleton rows={3} />
       ) : pendingEvents.length === 0 ? (
         <EmptyState
-          title="Approval Queue Cleared"
+          title="No events found. Approved and pending events will appear here when available."
           description="There are currently no proposed events awaiting administrative review."
         />
       ) : (

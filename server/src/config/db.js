@@ -221,9 +221,13 @@ export const initSchema = async () => {
       `ALTER TABLE events ADD CONSTRAINT chk_events_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 150);`,
       `ALTER TABLE events ADD CONSTRAINT chk_events_desc_len CHECK (length(description) <= 5000);`,
       `ALTER TABLE events ADD CONSTRAINT chk_events_venue_len CHECK (length(venue) <= 200);`,
-      `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_title_len CHECK (length(trim(title)) >= 3 AND length(title) <= 200);`,
+      `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_title_len CHECK (length(trim(title)) >= 3 AND length(trim(title)) <= 200);`,
       `ALTER TABLE announcements ADD CONSTRAINT chk_announcements_msg_len CHECK (length(message) <= 2000);`,
-      `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`
+      `ALTER TABLE event_registrations ADD CONSTRAINT chk_registrations_team_name CHECK (team_name IS NULL OR length(team_name) <= 100);`,
+      // Safe targeted purge of legacy seed dummy events on Neon
+      `DELETE FROM events WHERE title IN ('AI Horizon 2026: 36-Hour National Hackathon', 'Mastering Cloud-Native Microservices with Kubernetes', 'CyberDefend 2026: Campus Capture The Flag (CTF)', 'RoboWars 2026: Autonomous Combat Arena & Drone Racing', 'Tarang 2026: Annual University Cultural & Musical Odyssey') AND organizer_email = 'organizer@college.edu';`,
+      `DELETE FROM announcements WHERE title = 'Hacker Guide & API Keys Released';`,
+      `DELETE FROM audit_logs WHERE details = 'Approved event: AI Horizon 2026';`
     ];
 
     for (const statement of migrations) {

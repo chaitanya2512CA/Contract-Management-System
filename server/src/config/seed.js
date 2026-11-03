@@ -1,4 +1,4 @@
-﻿import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { query, isDatabaseConnected, initSchema } from './db.js';
@@ -127,9 +127,24 @@ export const ensureDemoAccounts = async () => {
 };
 
 /**
- * Seed sample college events, registrations, tickets, certificates, and audit logs
+ * Initialize core database personas (Admin, Student, Organizer)
+ * Note: Sample dummy events have been decoupled to ensure only genuine database records are served.
  */
 export const seedDatabase = async () => {
+  try {
+    await initSchema();
+    await ensureDemoAccounts();
+    console.log('[Seed] Core demo authentication accounts verified in Neon PostgreSQL.');
+  } catch (err) {
+    console.error('[Seed] Error initializing demo accounts in Neon PostgreSQL:', err.message);
+  }
+};
+
+/**
+ * Optional developer utility to seed sample college events for offline testing.
+ * Only executed if explicitly invoked via CLI with --seed-sample-events.
+ */
+export const seedSampleEvents = async () => {
   try {
     await initSchema();
     const { adminId, studentId, organizerId } = await ensureDemoAccounts();
@@ -138,7 +153,7 @@ export const seedDatabase = async () => {
     const eventCount = parseInt(eventCountRes.rows[0].count, 10);
 
     if (eventCount > 0) {
-      console.log(`[Seed] Neon PostgreSQL already contains ${eventCount} events. Seeding complete.`);
+      console.log(`[Seed] Neon PostgreSQL already contains ${eventCount} events. Skipping sample seeding.`);
       return;
     }
 
@@ -335,3 +350,12 @@ export const seedDatabase = async () => {
     console.error('[Seed] Error seeding Neon PostgreSQL database:', err.message);
   }
 };
+
+// Auto-run if executed directly as a script
+if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
+  if (process.argv.includes('--seed-sample-events')) {
+    seedSampleEvents().then(() => process.exit(0)).catch(() => process.exit(1));
+  } else {
+    seedDatabase().then(() => process.exit(0)).catch(() => process.exit(1));
+  }
+}

@@ -25,22 +25,41 @@ import { Footer } from '../../components/layout/Footer';
 export const LandingPage: React.FC = () => {
   const [trendingEvents, setTrendingEvents] = useState<CollegeEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    activeStudents: 0,
+    totalEvents: 0,
+    totalRegistrations: 0,
+    certificatesIssued: 0,
+  });
 
   useEffect(() => {
-    const fetchTrending = async () => {
+    const fetchData = async () => {
       try {
-        const res = await eventService.getTrendingEvents();
-        if (res.data.success) {
-          setTrendingEvents(res.data.events || []);
+        const [trendingRes, statsRes] = await Promise.allSettled([
+          eventService.getTrendingEvents(),
+          eventService.getPublicStats(),
+        ]);
+
+        if (trendingRes.status === 'fulfilled' && trendingRes.value.data.success) {
+          setTrendingEvents(trendingRes.value.data.events || []);
+        }
+
+        if (statsRes.status === 'fulfilled' && statsRes.value.data.success) {
+          setStats(statsRes.value.data.stats || {
+            activeStudents: 0,
+            totalEvents: 0,
+            totalRegistrations: 0,
+            certificatesIssued: 0,
+          });
         }
       } catch (err) {
-        console.error('Failed to load trending events', err);
+        console.error('Failed to load campus data', err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchTrending();
+    fetchData();
   }, []);
 
   return (
@@ -89,22 +108,30 @@ export const LandingPage: React.FC = () => {
               </Link>
             </div>
 
-            {/* Stats Counter */}
+            {/* Dynamic Campus Metrics Counter */}
             <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-slate-200/80 pt-8 dark:border-slate-800">
               <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">5,000+</p>
+                <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                  {stats.activeStudents.toLocaleString()}
+                </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Active Students</p>
               </div>
               <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">120+</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Annual Events</p>
+                <p className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
+                  {stats.totalEvents.toLocaleString()}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Approved Events</p>
               </div>
               <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-purple-600 dark:text-purple-400">100%</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">QR Attendance Verified</p>
+                <p className="text-2xl sm:text-3xl font-extrabold text-purple-600 dark:text-purple-400">
+                  {stats.totalRegistrations.toLocaleString()}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Registrations</p>
               </div>
               <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">3,400+</p>
+                <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {stats.certificatesIssued.toLocaleString()}
+                </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Certificates Issued</p>
               </div>
             </div>
@@ -143,7 +170,7 @@ export const LandingPage: React.FC = () => {
             </div>
           ) : trendingEvents.length === 0 ? (
             <p className="text-center text-xs text-slate-400 py-8">
-              No active approved events right now.
+              No events available right now. Please check back later.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

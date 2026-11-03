@@ -146,7 +146,7 @@ export const OrganizerDashboard: React.FC = () => {
         ) : events.length === 0 ? (
           <div className="py-8">
             <EmptyState
-              title="No events created yet"
+              title="You haven't created any events yet. Create your first event to get started."
               description="Start by creating your first technical workshop, hackathon, or seminar proposal."
               action={
                 <Link

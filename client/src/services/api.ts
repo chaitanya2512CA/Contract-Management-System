@@ -67,6 +67,8 @@ export const authService = {
 export const eventService = {
   getEvents: (params?: any) => api.get('/events', { params }),
 
+  getPublicStats: () => api.get('/events/stats'),
+
   getEventById: (id: string) => api.get(`/events/${id}`),
 
   getTrendingEvents: () => api.get('/events/trending'),

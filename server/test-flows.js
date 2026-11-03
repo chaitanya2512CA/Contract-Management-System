@@ -227,6 +227,21 @@ async function runTests() {
       'Duplicate student registration rejected with status 400'
     );
 
+    // --- ZERO DUMMY EVENTS & REAL DATABASE STATS VERIFICATION ---
+    const initialEventsRes = await fetch(`${BASE_URL}/events`);
+    const initialEventsData = await initialEventsRes.json();
+    assert(
+      initialEventsRes.status === 200 && initialEventsData.events.length === 0,
+      'Initial public events list is empty (0 dummy events loaded on startup)'
+    );
+
+    const publicStatsRes = await fetch(`${BASE_URL}/events/stats`);
+    const publicStatsData = await publicStatsRes.json();
+    assert(
+      publicStatsRes.status === 200 && publicStatsData.success && publicStatsData.stats.totalEvents === 0,
+      'Public stats endpoint returns dynamic totalEvents: 0 when no events exist'
+    );
+
     // 10. Input Validation: Long title rejected for events
     const longTitleEvent = await fetch(`${BASE_URL}/admin/events`, {
       method: 'POST',
@@ -283,6 +298,21 @@ async function runTests() {
     assert(
       adminEventsRes.status === 200 && adminEventsData.events.length > 0,
       `Admin retrieves events list (${adminEventsData.events.length} events returned)`
+    );
+
+    // Verify Public Events & Stats reflect the newly created event
+    const updatedEventsRes = await fetch(`${BASE_URL}/events`);
+    const updatedEventsData = await updatedEventsRes.json();
+    assert(
+      updatedEventsRes.status === 200 && updatedEventsData.events.length === 1,
+      'Public events listing displays genuine newly created event from Neon database'
+    );
+
+    const updatedStatsRes = await fetch(`${BASE_URL}/events/stats`);
+    const updatedStatsData = await updatedStatsRes.json();
+    assert(
+      updatedStatsRes.status === 200 && updatedStatsData.stats.totalEvents === 1,
+      'Public stats totalEvents dynamically incremented to 1 in Neon database'
     );
 
     // 13. Student Registration for Event

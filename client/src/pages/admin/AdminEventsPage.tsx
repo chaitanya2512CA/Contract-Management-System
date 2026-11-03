@@ -489,7 +489,7 @@ export const AdminEventsPage: React.FC = () => {
         ) : events.length === 0 ? (
           <div className="py-12">
             <EmptyState
-              title="No events found"
+              title="No events found. Approved and pending events will appear here when available."
               description="No events match your current filter or search parameters."
               action={
                 <Button variant="primary" onClick={handleOpenCreate}>

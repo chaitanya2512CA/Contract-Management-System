@@ -96,15 +96,21 @@ export const ExploreEventsPage: React.FC = () => {
           </div>
         ) : events.length === 0 ? (
           <EmptyState
-            title="No events match your search criteria"
-            description="Try modifying your keyword search or resetting category filters."
+            title="No events available right now. Please check back later."
+            description={
+              search || category !== 'All' || price !== 'all' || venueType !== 'all'
+                ? "No events match your filter criteria. Try resetting category or search filters."
+                : "Check back soon for upcoming campus hackathons, technical workshops, and fests."
+            }
             action={
-              <button
-                onClick={handleReset}
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 cursor-pointer"
-              >
-                Reset Filters
-              </button>
+              (search || category !== 'All' || price !== 'all' || venueType !== 'all') ? (
+                <button
+                  onClick={handleReset}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              ) : undefined
             }
           />
         ) : (

@@ -3,6 +3,35 @@ import { query, mapEvent } from '../config/db.js';
 import { validateText, validateUrl } from '../utils/validation.js';
 
 /**
+ * Get Public Campus Statistics for Landing Page & Overview
+ */
+export const getPublicStats = async (req, res) => {
+  try {
+    const eventsRes = await query(`SELECT COUNT(*) as count FROM events WHERE status = 'approved'`);
+    const studentsRes = await query(`SELECT COUNT(*) as count FROM users WHERE role = 'student' AND is_active = true`);
+    const registrationsRes = await query(`SELECT COUNT(*) as count FROM event_registrations`);
+    const certsRes = await query(`SELECT COUNT(*) as count FROM certificates`);
+
+    const totalEvents = parseInt(eventsRes.rows[0]?.count || '0', 10);
+    const activeStudents = parseInt(studentsRes.rows[0]?.count || '0', 10);
+    const totalRegistrations = parseInt(registrationsRes.rows[0]?.count || '0', 10);
+    const certificatesIssued = parseInt(certsRes.rows[0]?.count || '0', 10);
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalEvents,
+        activeStudents,
+        totalRegistrations,
+        certificatesIssued,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch campus public statistics.' });
+  }
+};
+
+/**
  * Get Public / Approved Events with Filtering & Search
  */
 export const getEvents = async (req, res) => {

@@ -209,15 +209,21 @@ export const StudentDashboard: React.FC = () => {
           </div>
         ) : aiRecommendations.length === 0 ? (
           <EmptyState
-            title="No custom recommendations yet"
-            description="Add more interests to your profile to help our recommendation engine tailor events for you."
+            title={allEvents.length === 0 ? "No events available right now. Please check back later." : "No custom recommendations yet"}
+            description={
+              allEvents.length === 0
+                ? "Check back soon for upcoming campus activities and hackathons."
+                : "Add more interests to your profile to help our recommendation engine tailor events for you."
+            }
             action={
-              <Link
-                to="/profile"
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
-              >
-                Customize Interests
-              </Link>
+              allEvents.length > 0 ? (
+                <Link
+                  to="/profile"
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                >
+                  Customize Interests
+                </Link>
+              ) : undefined
             }
           />
         ) : (
@@ -298,8 +304,12 @@ export const StudentDashboard: React.FC = () => {
           </div>
         ) : filteredEvents.length === 0 ? (
           <EmptyState
-            title="No events match your filter criteria"
-            description="Try loosening your filters or searching for different keywords."
+            title="No events available right now. Please check back later."
+            description={
+              allEvents.length === 0
+                ? "Check back soon for upcoming campus activities and hackathons."
+                : "No events match your filter criteria. Try loosening your filters or searching for different keywords."
+            }
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

@@ -5,6 +5,7 @@ import {
   getTrendingEvents,
   getRecommendedEvents,
   getCalendarEvents,
+  getPublicStats,
   createEvent,
   updateEvent,
   cancelEvent,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Public routes
 router.get('/', getEvents);
+router.get('/stats', getPublicStats);
 router.get('/trending', getTrendingEvents);
 router.get('/calendar', getCalendarEvents);
 

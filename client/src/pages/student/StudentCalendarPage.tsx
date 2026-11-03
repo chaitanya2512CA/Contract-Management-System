@@ -228,7 +228,9 @@ export const StudentCalendarPage: React.FC = () => {
           ) : (
             <div className="py-16 text-center text-xs text-slate-400">
               <CalendarIcon className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-700 mb-2" />
-              Click any event or date on the calendar to view schedule details.
+              {events.length === 0
+                ? 'No events available right now. Please check back later.'
+                : 'Click any event or date on the calendar to view schedule details.'}
             </div>
           )}
         </div>
