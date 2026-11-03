@@ -13,8 +13,13 @@ export default async function handler(req, res) {
       await connectDB();
       await ensureDemoAccounts();
       isInitialized = true;
+      console.log('[Vercel Serverless] Database connected and demo accounts synchronized.');
     } catch (err) {
-      console.warn('[Vercel Serverless] DB connection notice:', err.message);
+      console.error('[Vercel Serverless] Database initialization error:', {
+        message: err.message,
+        code: err.code,
+        host: process.env.POSTGRES_HOST || process.env.PGHOST || '(from DATABASE_URL)',
+      });
     }
   }
   return app(req, res);

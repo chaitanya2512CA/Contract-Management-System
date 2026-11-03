@@ -38,6 +38,16 @@ export const ensureDemoAccounts = async () => {
         bio || ''
       ]
     );
+
+    try {
+      await query(
+        `INSERT INTO profiles (id, email, full_name, role, phone, company_name, city, state, bio, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`,
+        [userId, email.toLowerCase(), name, role, phone || '+91 98765 43210', company || '', city || 'New Delhi', state || 'Delhi', bio || '']
+      );
+    } catch (_) {}
+
     return userId;
   };
 

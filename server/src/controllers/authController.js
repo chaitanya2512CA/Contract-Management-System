@@ -421,13 +421,21 @@ export const loginAdmin = async (req, res) => {
 
     await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
-    // Record audit log
+    // Record audit log and admin log
     try {
+      const logId = crypto.randomUUID();
       await query(
         `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
          VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
-        [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+        [logId, row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
       );
+      try {
+        await query(
+          `INSERT INTO admin_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
+           VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
+          [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+        );
+      } catch (_) {}
     } catch (e) {
       // Non-blocking audit record
     }
