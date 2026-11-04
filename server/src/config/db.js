@@ -100,13 +100,13 @@ export const getConnectionString = () => {
   }
 
   if (process.env.POSTGRES_HOST && process.env.POSTGRES_USER && process.env.POSTGRES_PASSWORD) {
-    const dbName = process.env.POSTGRES_DATABASE || process.env.PGDATABASE || 'contractiq';
+    const dbName = process.env.POSTGRES_DATABASE || process.env.PGDATABASE || 'neondb';
     const port = process.env.POSTGRES_PORT || 5432;
     return `postgres://${encodeURIComponent(process.env.POSTGRES_USER)}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}:${port}/${dbName}?sslmode=require`;
   }
 
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD) {
-    const dbName = process.env.PGDATABASE || process.env.POSTGRES_DATABASE || 'contractiq';
+    const dbName = process.env.PGDATABASE || process.env.POSTGRES_DATABASE || 'neondb';
     const port = process.env.PGPORT || 5432;
     return `postgres://${encodeURIComponent(process.env.PGUSER)}:${encodeURIComponent(process.env.PGPASSWORD)}@${process.env.PGHOST}:${port}/${dbName}?sslmode=require`;
   }
@@ -290,6 +290,32 @@ export const initSchema = async () => {
 
     // Safe progressive non-destructive migrations for existing database instances
     const migrations = [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
+      `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `CREATE TABLE IF NOT EXISTS admin_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+        admin_email VARCHAR(255) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        target_type VARCHAR(50) NOT NULL,
+        target_id VARCHAR(100) DEFAULT '',
+        details TEXT DEFAULT '',
+        ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
+      `CREATE TABLE IF NOT EXISTS audit_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+        admin_email VARCHAR(255) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        target_type VARCHAR(50) NOT NULL,
+        target_id VARCHAR(100) DEFAULT '',
+        details TEXT DEFAULT '',
+        ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id VARCHAR(50) DEFAULT '';`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id VARCHAR(50) DEFAULT '';`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_id VARCHAR(50) DEFAULT '';`,
@@ -367,7 +393,7 @@ export const connectDB = async () => {
         password: parsed.password,
         host: parsed.host,
         port: parsed.port ? parseInt(parsed.port, 10) : 5432,
-        database: parsed.database || 'contractiq',
+        database: parsed.database || process.env.PGDATABASE || process.env.POSTGRES_DATABASE || 'neondb',
         max: isVercel ? 2 : 10,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000,
@@ -483,7 +509,8 @@ export const mapUser = (row) => {
     interests: Array.isArray(row.interests) ? row.interests : (typeof row.interests === 'string' ? JSON.parse(row.interests) : []),
     organizationName: row.company_name || row.organization_name || '',
     isActive: row.is_active !== false,
-    lastLogin: row.last_login,
+    lastLogin: row.last_login_at || row.last_login,
+    last_login_at: row.last_login_at || row.last_login,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

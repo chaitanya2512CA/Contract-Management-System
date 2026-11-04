@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   state VARCHAR(100) DEFAULT '',
   is_active BOOLEAN DEFAULT true,
   last_login TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ DEFAULT NOW(),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS users (
   organization_name VARCHAR(150) DEFAULT '',
   is_active BOOLEAN DEFAULT true,
   last_login TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

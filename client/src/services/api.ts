@@ -57,6 +57,9 @@ export const authService = {
   loginAdmin: (credentials: { email: string; password: string }) =>
     api.post('/auth/admin/login', credentials),
 
+  adminLogin: (credentials: { email: string; password: string }) =>
+    api.post('/auth/admin-login', credentials),
+
   registerStudent: (data: any) => api.post('/auth/student/register', data),
 
   registerOrganizer: (data: any) => api.post('/auth/organizer/register', data),

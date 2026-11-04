@@ -119,8 +119,10 @@ export const registerStudent = async (req, res) => {
     const id = crypto.randomUUID();
 
     const insertRes = await query(
-      `INSERT INTO users (id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests, is_active)
-       VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true)
+      `INSERT INTO users (
+        id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests,
+        is_active, last_login, last_login_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW(), NOW())
        RETURNING *`,
       [
         id,
@@ -135,9 +137,24 @@ export const registerStudent = async (req, res) => {
       ]
     );
 
+    console.log("DB Insert/Update user registration:", id, 'student');
+
+    // Audit Log for Student Registration
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'USER_REGISTER', 'USER', $4, 'Student account registration', $5, NOW())`,
+        [crypto.randomUUID(), id, emailCheck.value, id, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs student register):", auditErr);
+    }
+
     const user = mapUser(insertRes.rows[0]);
     sendAuthResponse(user, 201, res, 'Student account registered successfully.');
   } catch (error) {
+    console.error("Auth DB Error:", error);
     if (error.code === '23505') {
       return res.status(400).json({
         success: false,
@@ -203,8 +220,10 @@ export const registerOrganizer = async (req, res) => {
     const id = crypto.randomUUID();
 
     const insertRes = await query(
-      `INSERT INTO users (id, name, email, password_hash, role, employee_id, department, organization_name, phone, is_active)
-       VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true)
+      `INSERT INTO users (
+        id, name, email, password_hash, role, employee_id, department, organization_name, phone,
+        is_active, last_login, last_login_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true, NOW(), NOW(), NOW(), NOW())
        RETURNING *`,
       [
         id,
@@ -218,9 +237,24 @@ export const registerOrganizer = async (req, res) => {
       ]
     );
 
+    console.log("DB Insert/Update user registration:", id, 'organizer');
+
+    // Audit Log for Organizer Registration
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'USER_REGISTER', 'USER', $4, 'Organizer account registration', $5, NOW())`,
+        [crypto.randomUUID(), id, emailCheck.value, id, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs organizer register):", auditErr);
+    }
+
     const user = mapUser(insertRes.rows[0]);
     sendAuthResponse(user, 201, res, 'Organizer account registered successfully.');
   } catch (error) {
+    console.error("Auth DB Error:", error);
     if (error.code === '23505') {
       return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
     }
@@ -282,12 +316,39 @@ export const loginStudent = async (req, res) => {
       });
     }
 
-    // Update last_login
-    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+    // Update last_login_at and last_login
+    try {
+      await query(
+        'UPDATE users SET last_login_at = NOW(), last_login = NOW(), updated_at = NOW() WHERE id = $1',
+        [row.id]
+      );
+    } catch (updateErr) {
+      console.error("Auth DB Error (student login timestamp):", updateErr);
+      try {
+        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+      } catch (fbErr) {
+        console.error("Auth DB Error (fallback student login timestamp):", fbErr);
+      }
+    }
+
+    console.log("DB Insert/Update user login:", row.id, row.role);
+
+    // Audit Log for Student Login
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'USER_LOGIN', 'USER', $4, 'Student logged in', $5, NOW())`,
+        [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs student login):", auditErr);
+    }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Welcome back to JurisFlow!');
   } catch (error) {
+    console.error("Auth DB Error:", error);
     return handleAuthError(res, error, 'Student login');
   }
 };
@@ -346,18 +407,46 @@ export const loginOrganizer = async (req, res) => {
       });
     }
 
-    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+    // Update last_login_at and last_login
+    try {
+      await query(
+        'UPDATE users SET last_login_at = NOW(), last_login = NOW(), updated_at = NOW() WHERE id = $1',
+        [row.id]
+      );
+    } catch (updateErr) {
+      console.error("Auth DB Error (organizer login timestamp):", updateErr);
+      try {
+        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+      } catch (fbErr) {
+        console.error("Auth DB Error (fallback organizer login timestamp):", fbErr);
+      }
+    }
+
+    console.log("DB Insert/Update user login:", row.id, row.role);
+
+    // Audit Log for Organizer Login
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'USER_LOGIN', 'USER', $4, 'Organizer logged in', $5, NOW())`,
+        [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs organizer login):", auditErr);
+    }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Organizer portal authentication successful.');
   } catch (error) {
+    console.error("Auth DB Error:", error);
     return handleAuthError(res, error, 'Organizer login');
   }
 };
 
 /**
- * Dedicated Administrator Login Portal Endpoint (/admin/login)
- * Strictly enforces admin role and records audit trail
+ * Dedicated Administrator Login Portal Endpoint (/admin/login and /admin-login)
+ * Strictly enforces admin role and records audit & admin logs
  */
 export const loginAdmin = async (req, res) => {
   try {
@@ -396,7 +485,7 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    // STRICT CHECK: Student or Organizer CANNOT log in through the admin portal!
+    // STRICT CHECK: Student or Organizer CANNOT log in through the admin portal
     if (row.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -411,31 +500,300 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
-
-    // Record audit log and admin log
+    // Update last_login_at and last_login in PostgreSQL
     try {
-      const logId = crypto.randomUUID();
       await query(
-        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
-         VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
-        [logId, row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+        'UPDATE users SET last_login_at = NOW(), last_login = NOW(), updated_at = NOW() WHERE id = $1',
+        [row.id]
       );
+    } catch (updateErr) {
+      console.error("Auth DB Error (update admin login timestamp):", updateErr);
       try {
-        await query(
-          `INSERT INTO admin_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
-           VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
-          [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
-        );
-      } catch (_) {}
-    } catch (e) {
-      // Non-blocking audit record
+        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+      } catch (fbErr) {
+        console.error("Auth DB Error (fallback admin login timestamp):", fbErr);
+      }
+    }
+
+    console.log("DB Insert/Update user login:", row.id, row.role);
+
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+
+    // Record admin_logs entry (awaited properly)
+    try {
+      await query(
+        `INSERT INTO admin_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5, NOW())`,
+        [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+      );
+    } catch (adminLogErr) {
+      console.error("Auth DB Error (admin_logs on loginAdmin):", adminLogErr);
+    }
+
+    // Record audit_logs entry (awaited properly)
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5, NOW())`,
+        [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs on loginAdmin):", auditErr);
     }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Administrator portal authentication successful.');
   } catch (error) {
+    console.error("Auth DB Error:", error);
     return handleAuthError(res, error, 'Administrator login');
+  }
+};
+
+/**
+ * Universal Login for JurisFlow
+ * Handles client, lawyer, business, and admin authentication
+ */
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    if (row.is_active === false) {
+      return res.status(403).json({ success: false, message: 'Your account is deactivated. Please contact support.' });
+    }
+
+    // 1. Update user last_login and last_login_at in PostgreSQL
+    try {
+      await query(
+        'UPDATE users SET last_login_at = NOW(), last_login = NOW(), updated_at = NOW() WHERE id = $1',
+        [row.id]
+      );
+    } catch (updateErr) {
+      console.error("Auth DB Error (update login timestamp):", updateErr);
+      try {
+        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+      } catch (fbErr) {
+        console.error("Auth DB Error (fallback login timestamp):", fbErr);
+      }
+    }
+
+    console.log("DB Insert/Update user login:", row.id, row.role);
+
+    // 2. Insert audit/admin log
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    if (row.role === 'admin') {
+      try {
+        await query(
+          `INSERT INTO admin_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+           VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator sign in via universal login', $5, NOW())`,
+          [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+        );
+      } catch (adminLogErr) {
+        console.error("Auth DB Error (admin_logs in universal login):", adminLogErr);
+      }
+
+      try {
+        await query(
+          `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+           VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator sign in', $5, NOW())`,
+          [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
+        );
+      } catch (auditErr) {
+        console.error("Auth DB Error (audit_logs in universal login admin):", auditErr);
+      }
+    } else {
+      try {
+        await query(
+          `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+           VALUES ($1, $2, $3, 'USER_LOGIN', 'USER', $4, $5, $6, NOW())`,
+          [crypto.randomUUID(), row.id, cleanEmail, row.id, `User logged in with role ${row.role}`, clientIp]
+        );
+      } catch (auditErr) {
+        console.error("Auth DB Error (audit_logs in user login):", auditErr);
+      }
+    }
+
+    const user = mapUser(row);
+
+    // If lawyer, include lawyer profile details
+    if (user.role === 'lawyer') {
+      try {
+        const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+        if (lawyerRes.rows.length > 0) {
+          user.lawyerProfile = lawyerRes.rows[0];
+        }
+      } catch (lawyerErr) {
+        console.error("Auth DB Error (fetching lawyerProfile in login):", lawyerErr);
+      }
+    }
+
+    sendAuthResponse(user, 200, res, 'Logged in successfully.');
+  } catch (error) {
+    console.error("Auth DB Error:", error);
+    return handleAuthError(res, error, 'Universal login');
+  }
+};
+
+/**
+ * Universal Registration for JurisFlow
+ * Supports client, lawyer, and business registration
+ */
+export const register = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role = 'client',
+      phone = '',
+      companyName = '',
+      city = 'New Delhi',
+      state = 'Delhi',
+      // Lawyer-specific fields
+      primarySpecialty = 'Contract Lawyer',
+      additionalSpecialties = [],
+      experienceYears = 3,
+      barCouncilNumber = '',
+      barState = '',
+      consultationFee15 = 499,
+      consultationFee30 = 899,
+      consultationFee60 = 1499,
+      bio = ''
+    } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const userId = crypto.randomUUID();
+
+    const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
+    const assignedRole = allowedRoles.includes(role) ? role : 'client';
+
+    // 1. Explicitly insert all required fields into primary users table
+    await query(
+      `INSERT INTO users (
+        id, name, email, password_hash, role, phone, company_name, city, state, bio,
+        is_active, last_login, last_login_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        true, NOW(), NOW(), NOW(), NOW()
+      )`,
+      [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+    );
+
+    console.log("DB Insert/Update user registration:", userId, assignedRole);
+
+    // 2. Sync into profiles table
+    try {
+      await query(
+        `INSERT INTO profiles (
+          id, email, full_name, role, phone, company_name, city, state, bio, is_active,
+          last_login, last_login_at, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, true,
+          NOW(), NOW(), NOW(), NOW()
+        ) ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, updated_at = NOW()`,
+        [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
+      );
+    } catch (profileErr) {
+      console.error("Auth DB Error (profiles sync):", profileErr);
+    }
+
+    // 3. If registered as advocate/lawyer, create lawyer_profiles and availability schedule
+    let lawyerProfile = null;
+    if (assignedRole === 'lawyer') {
+      const profileId = crypto.randomUUID();
+      const lawyerRes = await query(
+        `INSERT INTO lawyer_profiles (
+          id, user_id, full_name, headline, primary_specialty, additional_specialties,
+          experience_years, bar_council_number, bar_state, languages,
+          consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
+          is_instant_booking, is_verified, verification_status, bio, city, state,
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, false, 'pending', $15, $16, $17, NOW(), NOW())
+        RETURNING *`,
+        [
+          profileId,
+          userId,
+          name.trim(),
+          `${primarySpecialty} | Advocate`,
+          primarySpecialty,
+          JSON.stringify(additionalSpecialties),
+          Number(experienceYears) || 3,
+          barCouncilNumber,
+          barState,
+          JSON.stringify(['English', 'Hindi']),
+          Number(consultationFee15) || 499,
+          Number(consultationFee30) || 899,
+          Number(consultationFee60) || 1499,
+          JSON.stringify(['chat', 'audio', 'video']),
+          bio,
+          city,
+          state
+        ]
+      );
+      lawyerProfile = lawyerRes.rows[0];
+
+      // Add default availability (Mon-Fri 09:00 - 18:00)
+      for (let day = 1; day <= 5; day++) {
+        try {
+          await query(
+            `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
+             VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
+            [crypto.randomUUID(), profileId, day]
+          );
+        } catch (availErr) {
+          console.error("Auth DB Error (availability schedules):", availErr);
+        }
+      }
+    }
+
+    // 4. Record audit log for registration
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    try {
+      await query(
+        `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, 'USER_REGISTER', 'USER', $4, $5, $6, NOW())`,
+        [crypto.randomUUID(), userId, cleanEmail, userId, `User registration with role ${assignedRole}`, clientIp]
+      );
+    } catch (auditErr) {
+      console.error("Auth DB Error (audit_logs on registration):", auditErr);
+    }
+
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = mapUser(userRes.rows[0]);
+    if (lawyerProfile) {
+      user.lawyerProfile = lawyerProfile;
+    }
+
+    sendAuthResponse(user, 201, res, 'Account registered successfully.');
+  } catch (error) {
+    console.error("Auth DB Error:", error);
+    return handleAuthError(res, error, 'Universal registration');
   }
 };
 
@@ -451,9 +809,13 @@ export const getMe = async (req, res) => {
 
     const user = mapUser(userRes.rows[0]);
     if (user.role === 'lawyer') {
-      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
-      if (lawyerRes.rows.length > 0) {
-        user.lawyerProfile = lawyerRes.rows[0];
+      try {
+        const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+        if (lawyerRes.rows.length > 0) {
+          user.lawyerProfile = lawyerRes.rows[0];
+        }
+      } catch (lawyerErr) {
+        console.error("Auth DB Error (getMe lawyer profile):", lawyerErr);
       }
     }
 
@@ -462,6 +824,7 @@ export const getMe = async (req, res) => {
       user,
     });
   } catch (error) {
+    console.error("Auth DB Error:", error);
     res.status(500).json({ success: false, message: 'Failed to retrieve profile.' });
   }
 };
@@ -542,6 +905,7 @@ export const updateProfile = async (req, res) => {
       user,
     });
   } catch (error) {
+    console.error("Auth DB Error:", error);
     res.status(500).json({ success: false, message: error.message || 'Profile update failed.' });
   }
 };
@@ -591,6 +955,7 @@ export const changePassword = async (req, res) => {
       message: 'Password changed successfully.',
     });
   } catch (error) {
+    console.error("Auth DB Error:", error);
     res.status(500).json({ success: false, message: 'Error changing password.' });
   }
 };
@@ -610,176 +975,16 @@ export const forgotPassword = async (req, res) => {
     if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No registered student account found with this email address. Please register for an account.',
+        message: 'No registered account found with this email address. Please register for an account.',
       });
     }
 
     res.status(200).json({
       success: true,
-      message: `Account found for ${userRes.rows[0].name}. In this campus demo environment, automated email dispatch is not enabled. Please sign in using the configured demo credentials (student@college.edu / Student@12345) or contact campus administration at admin@college.edu.`,
+      message: `Account found for ${userRes.rows[0].name}. Please sign in using your configured credentials.`,
     });
   } catch (error) {
+    console.error("Auth DB Error:", error);
     res.status(500).json({ success: false, message: 'Error processing password reset request.' });
   }
 };
-
-/**
- * Universal Login for JurisFlow
- * Handles client, lawyer, business, and admin authentication
- */
-export const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required.' });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-
-    if (userRes.rows.length === 0) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
-    }
-
-    const row = userRes.rows[0];
-    const isMatch = await bcrypt.compare(password, row.password_hash);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
-    }
-
-    if (row.is_active === false) {
-      return res.status(403).json({ success: false, message: 'Your account is deactivated. Please contact support.' });
-    }
-
-    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
-
-    const user = mapUser(row);
-
-    // If lawyer, include lawyer profile details
-    if (user.role === 'lawyer') {
-      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
-      if (lawyerRes.rows.length > 0) {
-        user.lawyerProfile = lawyerRes.rows[0];
-      }
-    }
-
-    sendAuthResponse(user, 200, res, 'Logged in successfully.');
-  } catch (error) {
-    return handleAuthError(res, error, 'Universal login');
-  }
-};
-
-/**
- * Universal Registration for JurisFlow
- * Supports client, lawyer, and business registration
- */
-export const register = async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      password,
-      role = 'client',
-      phone = '',
-      companyName = '',
-      city = 'New Delhi',
-      state = 'Delhi',
-      // Lawyer-specific fields
-      primarySpecialty = 'Contract Lawyer',
-      additionalSpecialties = [],
-      experienceYears = 3,
-      barCouncilNumber = '',
-      barState = '',
-      consultationFee15 = 499,
-      consultationFee30 = 899,
-      consultationFee60 = 1499,
-      bio = ''
-    } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-    const userId = crypto.randomUUID();
-
-    const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
-    const assignedRole = allowedRoles.includes(role) ? role : 'client';
-
-    await query(
-      `INSERT INTO users (id, name, email, password_hash, role, phone, company_name, city, state, bio, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
-      [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
-    );
-
-    try {
-      await query(
-        `INSERT INTO profiles (id, email, full_name, role, phone, company_name, city, state, bio, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
-         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`,
-        [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
-      );
-    } catch (_) {}
-
-    let lawyerProfile = null;
-    if (assignedRole === 'lawyer') {
-      const profileId = crypto.randomUUID();
-      const lawyerRes = await query(
-        `INSERT INTO lawyer_profiles (
-          id, user_id, full_name, headline, primary_specialty, additional_specialties,
-          experience_years, bar_council_number, bar_state, languages,
-          consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
-          is_instant_booking, is_verified, verification_status, bio, city, state
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, false, 'pending', $15, $16, $17)
-        RETURNING *`,
-        [
-          profileId,
-          userId,
-          name.trim(),
-          `${primarySpecialty} | Advocate`,
-          primarySpecialty,
-          JSON.stringify(additionalSpecialties),
-          Number(experienceYears) || 3,
-          barCouncilNumber,
-          barState,
-          JSON.stringify(['English', 'Hindi']),
-          Number(consultationFee15) || 499,
-          Number(consultationFee30) || 899,
-          Number(consultationFee60) || 1499,
-          JSON.stringify(['chat', 'audio', 'video']),
-          bio,
-          city,
-          state
-        ]
-      );
-      lawyerProfile = lawyerRes.rows[0];
-
-      // Add default availability (Mon-Fri 09:00 - 18:00)
-      for (let day = 1; day <= 5; day++) {
-        await query(
-          `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
-           VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
-          [crypto.randomUUID(), profileId, day]
-        );
-      }
-    }
-
-    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
-    const user = mapUser(userRes.rows[0]);
-    if (lawyerProfile) {
-      user.lawyerProfile = lawyerProfile;
-    }
-
-    sendAuthResponse(user, 201, res, 'Account registered successfully.');
-  } catch (error) {
-    return handleAuthError(res, error, 'Universal registration');
-  }
-};
-

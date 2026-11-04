@@ -21,12 +21,15 @@ const router = express.Router();
 router.post('/login', authLimiter, login);
 router.post('/register', authLimiter, register);
 
+// Dedicated Admin Portals (/admin/login and /admin-login)
+router.post('/admin/login', authLimiter, loginAdmin);
+router.post('/admin-login', authLimiter, loginAdmin);
+
 // Legacy Collegiate Portals
 router.post('/student/register', authLimiter, registerStudent);
 router.post('/student/login', authLimiter, loginStudent);
 router.post('/organizer/register', authLimiter, registerOrganizer);
 router.post('/organizer/login', authLimiter, loginOrganizer);
-router.post('/admin/login', authLimiter, loginAdmin);
 
 router.post('/forgot-password', authLimiter, forgotPassword);
 
