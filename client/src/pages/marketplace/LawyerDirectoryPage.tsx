@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  Scale,
   Search,
   Filter,
   ShieldCheck,
@@ -205,23 +207,42 @@ export const LawyerDirectoryPage: React.FC = () => {
             ))}
           </div>
         ) : lawyers.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-slate-800">
-              <Search className="h-6 w-6 text-blue-600" />
+          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+              <Scale className="h-8 w-8" />
             </div>
-            <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">No advocates matched your criteria</h3>
-            <p className="mt-1 text-xs text-slate-500">Try clearing filters or selecting another practice specialty.</p>
-            <button
-              onClick={() => {
-                setSelectedSpecialty('all');
-                setSearchQuery('');
-                setSelectedMode('');
-                setVerifiedOnly(false);
-              }}
-              className="mt-4 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white"
-            >
-              Reset Filters
-            </button>
+            <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
+              {searchQuery || selectedSpecialty !== 'all' || selectedMode || verifiedOnly
+                ? 'No advocates matched your criteria'
+                : 'No advocates registered yet. Be the first advocate to join JurisFlow!'}
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-xs text-slate-500 dark:text-slate-400">
+              {searchQuery || selectedSpecialty !== 'all' || selectedMode || verifiedOnly
+                ? 'Try adjusting your search terms or clearing active filters to see all available counsel.'
+                : 'Join our elite network of verified Bar Council advocates and start offering legal consultations online.'}
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <Link
+                to="/register?role=lawyer"
+                className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-6 py-3 text-xs font-bold text-white shadow-md transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700"
+              >
+                <span>Register as an Advocate</span>
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+              {(searchQuery || selectedSpecialty !== 'all' || selectedMode || verifiedOnly) && (
+                <button
+                  onClick={() => {
+                    setSelectedSpecialty('all');
+                    setSearchQuery('');
+                    setSelectedMode('');
+                    setVerifiedOnly(false);
+                  }}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  Reset Filters
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -155,39 +155,6 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   </button>
 
                   <button
-                    onClick={() => handleDemoSwitch('criminal.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
-                    className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Adv. Vikramaditya</p>
-                      <p className="text-[10px] text-slate-500">Criminal Defense Specialist</p>
-                    </div>
-                    <Badge variant="warning">Criminal</Badge>
-                  </button>
-
-                  <button
-                    onClick={() => handleDemoSwitch('contract.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
-                    className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Adv. Siddharth</p>
-                      <p className="text-[10px] text-slate-500">CLM & Contracts Specialist</p>
-                    </div>
-                    <Badge variant="success">Contract</Badge>
-                  </button>
-
-                  <button
-                    onClick={() => handleDemoSwitch('family.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
-                    className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Adv. Meenakshi</p>
-                      <p className="text-[10px] text-slate-500">Family & Matrimonial</p>
-                    </div>
-                    <Badge variant="default">Family</Badge>
-                  </button>
-
-                  <button
                     onClick={() => handleDemoSwitch('business@jurisflow.com', 'Business@12345', '/business/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
@@ -197,6 +164,28 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                     </div>
                     <Badge variant="purple">Business</Badge>
                   </button>
+
+                  <button
+                    onClick={() => handleDemoSwitch('admin@jurisflow.com', 'Admin@12345', '/admin/dashboard')}
+                    className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white">Chief Legal Officer</p>
+                      <p className="text-[10px] text-slate-500">Platform Super Admin</p>
+                    </div>
+                    <Badge variant="danger">Admin</Badge>
+                  </button>
+
+                  <div className="pt-1.5 border-t border-slate-100 dark:border-slate-700">
+                    <Link
+                      to="/register?role=lawyer"
+                      onClick={() => setShowDemoSwitcher(false)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-50 py-2 text-center text-xs font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 dark:hover:bg-blue-900/60"
+                    >
+                      <Scale className="h-3.5 w-3.5" />
+                      <span>Register as an Advocate</span>
+                    </Link>
+                  </div>
 
 
                 </div>

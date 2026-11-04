@@ -92,32 +92,26 @@ export const UniversalLoginPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill('criminal.law@jurisflow.com', 'Lawyer@12345')}
-              className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
-            >
-              Criminal Lawyer
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('contract.law@jurisflow.com', 'Lawyer@12345')}
-              className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
-            >
-              Contract Lawyer
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('family.law@jurisflow.com', 'Lawyer@12345')}
-              className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
-            >
-              Family Lawyer
-            </button>
-            <button
-              type="button"
               onClick={() => handleQuickFill('business@jurisflow.com', 'Business@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Enterprise CLM
             </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill('admin@jurisflow.com', 'Admin@12345')}
+              className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
+            >
+              Super Admin
+            </button>
+          </div>
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+            <Link
+              to="/register?role=lawyer"
+              className="text-[11px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
+            >
+              Are you an advocate? Register on JurisFlow →
+            </Link>
           </div>
         </div>
 

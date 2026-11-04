@@ -222,64 +222,87 @@ export const LandingPage: React.FC = () => {
               </Link>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {topLawyers.map((lawyer) => (
-                <div
-                  key={lawyer.id}
-                  className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                >
-                  <div>
-                    <div className="flex items-start gap-3">
-                      <img
-                        src={
-                          lawyer.avatar ||
-                          'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
-                        }
-                        alt={lawyer.full_name}
-                        className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600"
-                      />
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
-                          {lawyer.full_name}
-                        </h4>
-                        <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 line-clamp-1">
-                          {lawyer.primary_specialty}
-                        </p>
-                        <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          <span className="font-bold text-slate-800 dark:text-slate-200">
-                            {Number(lawyer.rating_avg || 4.9).toFixed(1)}
-                          </span>
-                          <span>({lawyer.total_consultations || 20})</span>
+            {topLawyers.length === 0 ? (
+              <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+                  <Scale className="h-7 w-7" />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+                  No advocates registered yet. Be the first advocate to join JurisFlow!
+                </h3>
+                <p className="mx-auto mt-2 max-w-md text-xs text-slate-500 dark:text-slate-400">
+                  Connect with verified clients seeking legal counsel across 15 practice specialties.
+                </p>
+                <div className="mt-5">
+                  <Link
+                    to="/register?role=lawyer"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700"
+                  >
+                    <span>Register as an Advocate</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {topLawyers.map((lawyer) => (
+                  <div
+                    key={lawyer.id}
+                    className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div>
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={
+                            lawyer.avatar ||
+                            'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
+                          }
+                          alt={lawyer.full_name}
+                          className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600"
+                        />
+                        <div className="flex-1">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                            {lawyer.full_name}
+                          </h4>
+                          <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 line-clamp-1">
+                            {lawyer.primary_specialty}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+                            </span>
+                            <span>({lawyer.total_consultations || 20})</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
+                      <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
 
-                    <p className="mt-2 text-[10px] font-semibold text-slate-400">
-                      {lawyer.experience_years} Years Experience • {lawyer.city}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] uppercase font-bold text-slate-400">Fee from</span>
-                      <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                        ₹{lawyer.consultation_fee_15 || 499}
+                      <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                        {lawyer.experience_years} Years Experience • {lawyer.city}
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedLawyer(lawyer)}
-                      className="rounded-xl bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
-                    >
-                      Book Now
-                    </button>
+                    <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400">Fee from</span>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          ₹{lawyer.consultation_fee_15 || 499}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedLawyer(lawyer)}
+                        className="rounded-xl bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
+                      >
+                        Book Now
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

@@ -22,7 +22,11 @@ export const getLawyers = async (req, res) => {
     } = req.query;
 
     const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
-    const conditions = ['lp.is_verified = true OR lp.verification_status != $1'];
+    const conditions = [
+      "u.role IN ('lawyer', 'advocate')",
+      "u.is_active = true",
+      "(lp.is_verified = true OR lp.verification_status != $1)"
+    ];
     const params = ['rejected'];
 
     let paramIndex = 2;
@@ -101,7 +105,7 @@ export const getLawyers = async (req, res) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countRes = await query(
-      `SELECT COUNT(*) FROM lawyer_profiles lp ${whereClause}`,
+      `SELECT COUNT(*) FROM lawyer_profiles lp JOIN users u ON lp.user_id = u.id ${whereClause}`,
       params
     );
     const total = parseInt(countRes.rows[0].count, 10);

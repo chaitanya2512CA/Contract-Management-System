@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Scale, Lock, Mail, User, Phone, Briefcase, Building, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -7,7 +7,13 @@ export const UniversalRegisterPage: React.FC = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const [role, setRole] = useState<'client' | 'lawyer' | 'business'>('client');
+  const [searchParams] = useSearchParams();
+  const roleParam = searchParams.get('role');
+  const initialRole = (roleParam === 'lawyer' || roleParam === 'advocate')
+    ? 'lawyer'
+    : (roleParam === 'business' ? 'business' : 'client');
+
+  const [role, setRole] = useState<'client' | 'lawyer' | 'business'>(initialRole);
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -129,7 +135,7 @@ export const UniversalRegisterPage: React.FC = () => {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Rahul Sharma or Adv. Ananya Roy"
+                placeholder="e.g. Adv. Rajesh Sharma or Rahul Sharma"
                 className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
               />
             </div>
