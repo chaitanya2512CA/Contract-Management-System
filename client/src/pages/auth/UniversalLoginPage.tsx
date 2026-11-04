@@ -118,13 +118,6 @@ export const UniversalLoginPage: React.FC = () => {
             >
               Enterprise CLM
             </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin@contractiq.com', 'Admin@12345')}
-              className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
-            >
-              Super Admin
-            </button>
           </div>
         </div>
 

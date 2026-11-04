@@ -113,14 +113,14 @@ export const getConnectionString = () => {
   }
 
   if (process.env.POSTGRES_HOST && process.env.POSTGRES_USER && process.env.POSTGRES_PASSWORD) {
-    const dbName = process.env.POSTGRES_DATABASE || 'postgres';
+    const dbName = process.env.POSTGRES_DATABASE || process.env.PGDATABASE || 'contractiq';
     const isPooler = process.env.POSTGRES_HOST.includes('pooler.supabase.com');
     const port = process.env.POSTGRES_PORT || (isPooler ? 6543 : 5432);
     return `postgres://${encodeURIComponent(process.env.POSTGRES_USER)}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}:${port}/${dbName}?sslmode=require`;
   }
 
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD) {
-    const dbName = process.env.PGDATABASE || 'postgres';
+    const dbName = process.env.PGDATABASE || process.env.POSTGRES_DATABASE || 'contractiq';
     const isPooler = process.env.PGHOST.includes('pooler.supabase.com');
     const port = process.env.PGPORT || (isPooler ? 6543 : 5432);
     return `postgres://${encodeURIComponent(process.env.PGUSER)}:${encodeURIComponent(process.env.PGPASSWORD)}@${process.env.PGHOST}:${port}/${dbName}?sslmode=require`;
@@ -278,6 +278,20 @@ export const initSchema = async () => {
   }
 
   try {
+    // Fast path for serverless runtimes: if core tables already exist, skip redundant heavy DDL
+    try {
+      const probe = await currentPool.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1"
+      );
+      if (probe && probe.rows && probe.rows.length > 0) {
+        isSchemaInitialized = true;
+        isReady = true;
+        return true;
+      }
+    } catch (_) {
+      // Proceed to initialize if probe fails
+    }
+
     // Execute bundled schema SQL directly (guaranteed to be available in serverless environments)
     if (SCHEMA_SQL) {
       await currentPool.query(SCHEMA_SQL);
@@ -394,12 +408,20 @@ export const connectDB = async () => {
       let newPool;
 
       if (isNeonHost) {
-        console.log('[DB] Connecting to Neon PostgreSQL using @neondatabase/serverless WebSocket pooler...');
-        newPool = new NeonPool({
-          connectionString: connStr,
-          max: isVercel ? 2 : 10,
-          connectionTimeoutMillis: 10000,
-        });
+        console.log('[DB] Connecting to Neon PostgreSQL using connection pool with strict TLS verification...');
+        try {
+          newPool = new Pool(poolConfig);
+          const client = await newPool.connect();
+          await client.query('SELECT 1');
+          client.release();
+        } catch (poolErr) {
+          console.warn('[DB] Neon TCP pool notice, falling back to WebSocket pooler:', poolErr.message);
+          newPool = new NeonPool({
+            connectionString: connStr,
+            max: isVercel ? 2 : 10,
+            connectionTimeoutMillis: 10000,
+          });
+        }
       } else {
         newPool = new Pool(poolConfig);
       }

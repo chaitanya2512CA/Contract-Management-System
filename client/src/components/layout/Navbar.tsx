@@ -198,16 +198,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                     <Badge variant="purple">Business</Badge>
                   </button>
 
-                  <button
-                    onClick={() => handleDemoSwitch('admin@contractiq.com', 'Admin@12345', '/admin/dashboard')}
-                    className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Chief Legal Officer</p>
-                      <p className="text-[10px] text-slate-500">Institutional Governance & Verification</p>
-                    </div>
-                    <Badge variant="danger">Admin</Badge>
-                  </button>
+
                 </div>
               </div>
             )}

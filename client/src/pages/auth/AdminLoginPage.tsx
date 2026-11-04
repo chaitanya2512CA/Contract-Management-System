@@ -58,12 +58,6 @@ export const AdminLoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickDemo = () => {
-    setEmail('admin@college.edu');
-    setPassword('Admin@12345');
-    setErrorMessage('');
-  };
-
   return (
     <div className="flex min-h-screen flex-col justify-center bg-slate-900 py-12 sm:px-6 lg:px-8 text-white relative overflow-hidden">
       {/* Background ambient lighting */}
@@ -127,7 +121,7 @@ export const AdminLoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@college.edu"
+                  placeholder="admin@contractiq.com"
                   className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-10 pr-3.5 text-xs text-white placeholder:text-slate-500 focus:border-indigo-500 focus:bg-slate-800 focus:outline-none"
                 />
               </div>
@@ -176,27 +170,6 @@ export const AdminLoginPage: React.FC = () => {
               Verify Administrative Access
             </Button>
           </form>
-
-          {/* Quick Fill Credentials for Reviewer Demo */}
-          <div className="mt-6 border-t border-slate-800 pt-5">
-            <div className="rounded-xl bg-slate-800/60 p-3 border border-slate-700/60">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-300">
-                  Pre-configured Admin Seed:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleQuickDemo}
-                  className="rounded-lg bg-indigo-600/40 px-2 py-1 text-[11px] font-bold text-indigo-300 hover:bg-indigo-600/60 cursor-pointer"
-                >
-                  Auto Fill
-                </button>
-              </div>
-              <p className="mt-1 font-mono text-[11px] text-slate-400">
-                admin@college.edu • Admin@12345
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Portal Switching links */}
