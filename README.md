@@ -1,6 +1,6 @@
-# ContractIQ — AI-Powered Contract Lifecycle Management & Lawyer Consultation Marketplace
+# JurisFlow — Your Legal World, Organized in One Flow.
 
-ContractIQ is a comprehensive enterprise-grade platform uniting **AI-Powered Contract Lifecycle Management (CLM)** with an **Astrotalk-style on-demand legal consultation marketplace**. Built to empower individuals, startups, enterprise legal departments, and independent Bar Council advocates.
+JurisFlow is a comprehensive enterprise-grade legal platform uniting **AI-Powered Contract Lifecycle Management (CLM)** with an **Astrotalk-style on-demand legal consultation marketplace**. Built to empower individuals, startups, enterprise legal departments, and independent Bar Council advocates.
 
 ---
 
@@ -74,7 +74,7 @@ The platform is pre-seeded with realistic data across all user personas. All log
 | **Adv. Vikram Malhotra** | Advocate (Criminal) | `lawyer.criminal@contractiq.law` | `Lawyer@12345` | Criminal Defence (16 yrs exp) |
 | **Adv. Sneha Deshmukh** | Advocate (Contract) | `lawyer.contract@contractiq.law` | `Lawyer@12345` | Contract Lifecycle & Licensing (11 yrs exp) |
 | **Vikramaditya Rao** | Business Enterprise | `business@contractiq.law` | `Business@12345` | General Counsel, Apex Tech Ventures |
-| **ContractIQ Lead Admin** | Super Administrator | `admin@contractiq.law` | `Admin@12345` | Platform Operations & Verification |
+| **JurisFlow Lead Admin** | Super Administrator | `admin@contractiq.law` | `Admin@12345` | Platform Operations & Verification |
 
 ---
 
@@ -176,4 +176,4 @@ The repository includes a battle-tested `vercel.json` configuration configured f
 
 ## ⚖️ Statutory & Compliance Disclaimer
 
-*ContractIQ is a legal technology platform facilitating contract lifecycle management, legal project collaboration, and appointment discovery between clients and independent advocates. In accordance with Bar Council of India regulations, the advocate listings on ContractIQ do not constitute advertisement or solicitation of legal work. All advocates listed are independent practitioners responsible for their professional legal opinions.*
+*JurisFlow is a legal technology platform facilitating contract lifecycle management, legal project collaboration, and appointment discovery between clients and independent advocates. In accordance with Bar Council of India regulations, the advocate listings on JurisFlow do not constitute advertisement or solicitation of legal work. All advocates listed are independent practitioners responsible for their professional legal opinions.*

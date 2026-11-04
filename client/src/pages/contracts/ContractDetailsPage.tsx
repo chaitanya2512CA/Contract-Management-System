@@ -342,7 +342,7 @@ export const ContractDetailsPage: React.FC = () => {
               {/* Chat Stream */}
               <div className="flex-1 overflow-y-auto py-3 space-y-3">
                 <div className="rounded-2xl bg-blue-50/70 p-3 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                  <p className="font-semibold text-blue-900 dark:text-blue-300">ContractIQ Legal Assistant</p>
+                  <p className="font-semibold text-blue-900 dark:text-blue-300">JurisFlow Legal Assistant</p>
                   <p className="mt-1">
                     I've indexed "{contract.title}". Ask me about liability caps, indemnification, non-solicitation, or
                     termination conditions!

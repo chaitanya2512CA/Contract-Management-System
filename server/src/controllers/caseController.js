@@ -185,7 +185,7 @@ export const createCase = async (req, res) => {
     const caseId = crypto.randomUUID();
 
     const initialChronology = [
-      { date: new Date().toISOString().split('T')[0], event: 'Case file initialized on ContractIQ platform.' },
+      { date: new Date().toISOString().split('T')[0], event: 'Case file initialized on JurisFlow platform.' },
     ];
 
     await query(

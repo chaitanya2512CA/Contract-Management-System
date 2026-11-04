@@ -1,9 +1,9 @@
 import crypto from 'crypto';
 import { query } from '../config/db.js';
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_contractiq_sandbox_2026';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'rzp_secret_contractiq_secure_dev';
-const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || 'whsec_contractiq_webhook_2026';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_jurisflow_sandbox_2026';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'rzp_secret_jurisflow_secure_dev';
+const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || 'whsec_jurisflow_webhook_2026';
 
 /**
  * Create Payment Order for Consultation Booking or Service Request

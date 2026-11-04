@@ -64,21 +64,19 @@ export const LandingPage: React.FC = () => {
           <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
             {/* Tagline Pill */}
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-xs font-bold text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300">
-              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span>India's Premier AI Legal Operating System & Advocate Marketplace</span>
+              <Scale className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span>JurisFlow • Your Legal World, Organized in One Flow.</span>
             </div>
 
             {/* Main Headline */}
             <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-900 sm:text-6xl dark:text-white">
-              AI-Powered Contract Intelligence & <br />
-              <span className="text-blue-700 dark:text-blue-500">Instant Advocate Consultations</span>
+              Your Legal World, <br />
+              <span className="text-blue-700 dark:text-blue-500">Organized in One Flow.</span>
             </h1>
 
             {/* Sub-headline */}
             <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">
-              The complete legal ecosystem. Review and negotiate agreements with instant AI risk scoring (0–100), red-flag
-              detection, and e-signatures. Connect with verified Bar Council advocates through encrypted video, audio, or
-              chat consultations.
+              AI-Powered Contract Intelligence & Verified Advocate Consultations. Review and negotiate agreements with instant AI risk scoring (0–100), red-flag detection, and e-signatures in a unified workspace.
             </p>
 
             {/* CTA Buttons */}
@@ -168,7 +166,7 @@ export const LandingPage: React.FC = () => {
               Seamless 4-Step Journey
             </span>
             <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
-              Consulting an Advocate is Frictionless on ContractIQ
+              Consulting an Advocate is Frictionless on JurisFlow
             </h2>
 
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 text-left">
@@ -289,7 +287,7 @@ export const LandingPage: React.FC = () => {
         <section className="bg-slate-100 py-6 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
             <p className="text-[11px] text-slate-500 leading-relaxed max-w-4xl mx-auto">
-              <strong>STATUTORY & ETHICAL DISCLAIMER:</strong> ContractIQ is an independent legal technology and contract
+              <strong>STATUTORY & ETHICAL DISCLAIMER:</strong> JurisFlow is an independent legal technology and contract
               lifecycle management platform. The advocates listed on this platform are independent legal practitioners
               registered with their respective State Bar Councils. In accordance with the Advocates Act, 1961 and the Bar
               Council of India Rules, this platform does not solicit legal work, advertise, or promote legal services. The

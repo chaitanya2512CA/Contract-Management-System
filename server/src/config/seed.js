@@ -145,6 +145,60 @@ export const ensureDemoAccounts = async () => {
     bio: 'Oversees platform advocate verification, commission distribution, compliance auditing, and disputes.'
   });
 
+
+  // Primary JurisFlow Seed Accounts
+  await ensureUser({
+    name: 'Chief Legal Officer (Admin)',
+    email: 'admin@jurisflow.com',
+    password: 'Admin@12345',
+    role: 'admin',
+    phone: '+91 99000 11223',
+    company: 'JurisFlow Legal Governance',
+    city: 'New Delhi',
+    state: 'Delhi',
+  });
+  await ensureUser({
+    name: 'Rahul Sharma',
+    email: 'client@jurisflow.com',
+    password: 'Client@12345',
+    role: 'client',
+    phone: '+91 98111 22334',
+    city: 'New Delhi',
+    state: 'Delhi',
+  });
+  await ensureUser({
+    name: 'Vikram Singhania',
+    email: 'business@jurisflow.com',
+    password: 'Business@12345',
+    role: 'business',
+    company: 'Apex Dynamics Technologies Pvt. Ltd.',
+    phone: '+91 98222 33445',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+  });
+
+  // Backward compatibility alias accounts
+  await ensureUser({
+    name: 'Chief Legal Officer (Admin)',
+    email: 'admin@contractiq.com',
+    password: 'Admin@12345',
+    role: 'admin',
+    phone: '+91 99000 11223',
+    company: 'JurisFlow Legal Governance',
+  });
+  await ensureUser({
+    name: 'Rahul Sharma',
+    email: 'client@contractiq.com',
+    password: 'Client@12345',
+    role: 'client',
+  });
+  await ensureUser({
+    name: 'Vikram Singhania',
+    email: 'business@contractiq.com',
+    password: 'Business@12345',
+    role: 'business',
+  });
+
   // Support legacy demo accounts for test suite compatibility
   await ensureUser({
     name: process.env.ADMIN_NAME || 'Chief Campus Administrator',
@@ -767,7 +821,7 @@ export const ensureDemoAccounts = async () => {
     );
   }
 
-  console.log('[Seed] ContractIQ multi-role personas, advocates, CLM contracts, cases, and ledgers synchronized successfully.');
+  console.log('[Seed] JurisFlow multi-role personas, advocates, CLM contracts, cases, and ledgers synchronized successfully.');
   return { adminId, clientId, businessId };
 };
 
@@ -776,7 +830,7 @@ export const seedDatabase = async () => {
     await initSchema();
     return await ensureDemoAccounts();
   } catch (err) {
-    console.error('[Seed] Error during ContractIQ initialization:', err.message);
+    console.error('[Seed] Error during JurisFlow initialization:', err.message);
   }
 };
 

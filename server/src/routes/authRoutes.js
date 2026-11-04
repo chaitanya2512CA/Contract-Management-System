@@ -17,7 +17,7 @@ import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Universal ContractIQ Authentication
+// Universal JurisFlow Authentication
 router.post('/login', authLimiter, login);
 router.post('/register', authLimiter, register);
 

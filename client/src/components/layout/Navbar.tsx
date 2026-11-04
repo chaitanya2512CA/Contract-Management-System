@@ -74,13 +74,13 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ContractIQ</span>
+                <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">JurisFlow</span>
                 <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                   LEGAL TECH
                 </span>
               </div>
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                AI CLM & Advocate Marketplace
+                Your Legal World, Organized in One Flow.
               </span>
             </div>
           </Link>
@@ -140,11 +140,11 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     One-Click Persona Switcher
                   </p>
-                  <p className="text-[11px] text-slate-400">Instantly switch between real ContractIQ roles</p>
+                  <p className="text-[11px] text-slate-400">Instantly switch between real JurisFlow roles</p>
                 </div>
                 <div className="space-y-1">
                   <button
-                    onClick={() => handleDemoSwitch('client@contractiq.com', 'Client@12345', '/client/dashboard')}
+                    onClick={() => handleDemoSwitch('client@jurisflow.com', 'Client@12345', '/client/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     <div>
@@ -155,7 +155,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   </button>
 
                   <button
-                    onClick={() => handleDemoSwitch('criminal.law@contractiq.com', 'Lawyer@12345', '/lawyer/dashboard')}
+                    onClick={() => handleDemoSwitch('criminal.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     <div>
@@ -166,7 +166,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   </button>
 
                   <button
-                    onClick={() => handleDemoSwitch('contract.law@contractiq.com', 'Lawyer@12345', '/lawyer/dashboard')}
+                    onClick={() => handleDemoSwitch('contract.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     <div>
@@ -177,7 +177,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   </button>
 
                   <button
-                    onClick={() => handleDemoSwitch('family.law@contractiq.com', 'Lawyer@12345', '/lawyer/dashboard')}
+                    onClick={() => handleDemoSwitch('family.law@jurisflow.com', 'Lawyer@12345', '/lawyer/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     <div>
@@ -188,7 +188,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
                   </button>
 
                   <button
-                    onClick={() => handleDemoSwitch('business@contractiq.com', 'Business@12345', '/business/dashboard')}
+                    onClick={() => handleDemoSwitch('business@jurisflow.com', 'Business@12345', '/business/dashboard')}
                     className="flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     <div>

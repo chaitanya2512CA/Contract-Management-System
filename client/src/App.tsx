@@ -7,23 +7,23 @@ import { StudentLayout } from './components/layout/StudentLayout';
 import { OrganizerLayout } from './components/layout/OrganizerLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 
-// Public Pages (ContractIQ)
+// Public Pages (JurisFlow)
 import { LandingPage } from './pages/public/LandingPage';
 import { LawyerDirectoryPage } from './pages/marketplace/LawyerDirectoryPage';
 import { LegalServicesPage } from './pages/marketplace/LegalServicesPage';
 
-// ContractIQ Auth Pages
+// JurisFlow Auth Pages
 import { UniversalLoginPage } from './pages/auth/UniversalLoginPage';
 import { UniversalRegisterPage } from './pages/auth/UniversalRegisterPage';
 
-// ContractIQ Dashboards & Workspaces
+// JurisFlow Dashboards & Workspaces
 import { ClientDashboard } from './pages/client/ClientDashboard';
 import { LawyerDashboard } from './pages/lawyer/LawyerDashboard';
 import { LawyerProfilePage } from './pages/lawyer/LawyerProfilePage';
 import { BusinessDashboard } from './pages/business/BusinessDashboard';
-import { ContractIQAdminDashboard } from './pages/admin/ContractIQAdminDashboard';
+import { JurisFlowAdminDashboard } from './pages/admin/JurisFlowAdminDashboard';
 
-// ContractIQ CLM, Cases & Consultations
+// JurisFlow CLM, Cases & Consultations
 import { ContractDetailsPage } from './pages/contracts/ContractDetailsPage';
 import { CasesListPage } from './pages/cases/CasesListPage';
 import { CaseDetailsPage } from './pages/cases/CaseDetailsPage';
@@ -65,16 +65,16 @@ import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
 export const App: React.FC = () => {
   return (
     <Routes>
-      {/* ContractIQ Public & Marketplace Pages */}
+      {/* JurisFlow Public & Marketplace Pages */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/lawyers" element={<LawyerDirectoryPage />} />
       <Route path="/services" element={<LegalServicesPage />} />
 
-      {/* ContractIQ Authentication */}
+      {/* JurisFlow Authentication */}
       <Route path="/login" element={<UniversalLoginPage />} />
       <Route path="/register" element={<UniversalRegisterPage />} />
 
-      {/* ContractIQ Client Portal */}
+      {/* JurisFlow Client Portal */}
       <Route
         path="/client/dashboard"
         element={
@@ -84,7 +84,7 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* ContractIQ Lawyer Portal */}
+      {/* JurisFlow Lawyer Portal */}
       <Route
         path="/lawyer/dashboard"
         element={
@@ -102,7 +102,7 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* ContractIQ Business & CLM Portal */}
+      {/* JurisFlow Business & CLM Portal */}
       <Route
         path="/business/dashboard"
         element={
@@ -128,7 +128,7 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* ContractIQ Legal Cases */}
+      {/* JurisFlow Legal Cases */}
       <Route
         path="/cases"
         element={
@@ -146,7 +146,7 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* ContractIQ Real-time Consultation Room */}
+      {/* JurisFlow Real-time Consultation Room */}
       <Route
         path="/consultations/:id/room"
         element={
@@ -156,12 +156,12 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* ContractIQ Admin Portal */}
+      {/* JurisFlow Admin Portal */}
       <Route
         path="/admin/dashboard"
         element={
           <ProtectedRoute allowedRoles={['admin']}>
-            <ContractIQAdminDashboard />
+            <JurisFlowAdminDashboard />
           </ProtectedRoute>
         }
       />

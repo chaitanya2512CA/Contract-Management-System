@@ -1,4 +1,4 @@
--- ContractIQ & Enterprise Legal Ecosystem Database Schema
+-- JurisFlow & Enterprise Legal Ecosystem Database Schema
 -- Compatible with PostgreSQL 14+, Neon PostgreSQL, and local pg-mem engine
 
 -- 1. Profiles (Unified User Profile synced with auth.users)

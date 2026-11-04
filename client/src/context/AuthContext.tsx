@@ -24,19 +24,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('campuspulse_user');
+    const saved = (localStorage.getItem('jurisflow_user') || localStorage.getItem('campuspulse_user'));
     return saved ? JSON.parse(saved) : null;
   });
 
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('campuspulse_token');
+    return (localStorage.getItem('jurisflow_token') || localStorage.getItem('campuspulse_token'));
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const handleAuthSuccess = (resData: { token: string; user: User }) => {
-    localStorage.setItem('campuspulse_token', resData.token);
-    localStorage.setItem('campuspulse_user', JSON.stringify(resData.user));
+    localStorage.setItem('jurisflow_token', resData.token);
+    localStorage.setItem('jurisflow_user', JSON.stringify(resData.user));
     setToken(resData.token);
     setUser(resData.user);
     return resData.user;
@@ -46,19 +46,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initializeAuth = async () => {
-      const savedToken = localStorage.getItem('campuspulse_token');
+      const savedToken = (localStorage.getItem('jurisflow_token') || localStorage.getItem('campuspulse_token'));
       if (savedToken) {
         try {
           const res = await authService.getMe();
           if (mounted && res.data.success && res.data.user) {
             setUser(res.data.user);
-            localStorage.setItem('campuspulse_user', JSON.stringify(res.data.user));
+            localStorage.setItem('jurisflow_user', JSON.stringify(res.data.user));
           }
         } catch (err: any) {
           if (err.response && (err.response.status === 401 || err.response.status === 403)) {
             console.warn('Session verification failed, clearing expired credentials.');
-            localStorage.removeItem('campuspulse_token');
-            localStorage.removeItem('campuspulse_user');
+            localStorage.removeItem('jurisflow_token'); localStorage.removeItem('campuspulse_token');
+            localStorage.removeItem('jurisflow_user'); localStorage.removeItem('campuspulse_user');
             if (mounted) {
               setUser(null);
               setToken(null);
@@ -124,8 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('campuspulse_token');
-    localStorage.removeItem('campuspulse_user');
+    localStorage.removeItem('jurisflow_token'); localStorage.removeItem('campuspulse_token');
+    localStorage.removeItem('jurisflow_user'); localStorage.removeItem('campuspulse_user');
     setUser(null);
     setToken(null);
   };
@@ -134,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const updated = { ...user, ...updatedFields };
     setUser(updated);
-    localStorage.setItem('campuspulse_user', JSON.stringify(updated));
+    localStorage.setItem('jurisflow_user', JSON.stringify(updated));
   };
 
   return (

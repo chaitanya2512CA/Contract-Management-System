@@ -29,7 +29,7 @@ const router = express.Router();
 router.use(protect);
 router.use(requireRole('admin'));
 
-// ContractIQ Platform Metrics & Settings
+// JurisFlow Platform Metrics & Settings
 router.get('/metrics', getPlatformMetrics);
 router.get('/settings/commission', getPlatformSettings);
 router.put('/settings/commission', updatePlatformSettings);

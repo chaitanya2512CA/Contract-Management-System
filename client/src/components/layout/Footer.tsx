@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Shield, Heart } from 'lucide-react';
+import { Scale, Shield, Sparkles, FileText, Briefcase, Users } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
@@ -9,41 +9,50 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="space-y-3 md:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white">
-                <Sparkles className="h-4 w-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-700 text-white shadow-md shadow-blue-200 dark:bg-blue-600 dark:shadow-none">
+                <Scale className="h-5 w-5" />
               </div>
-              <span className="font-bold text-slate-900 dark:text-white">CampusPulse</span>
+              <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                JurisFlow
+              </span>
             </div>
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+              Your Legal World, Organized in One Flow.
+            </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              The modern college event management and campus engagement platform. Discover hackathons, workshops, and student festivals.
+              The AI-powered legal ecosystem for seamless contract lifecycle management, automated risk redlining, and verified Bar Council advocate consultations.
             </p>
           </div>
 
-          {/* Quick Links */}
+          {/* Legal Solutions */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Discover
+              Legal Solutions
             </h4>
             <ul className="mt-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
               <li>
-                <Link to="/events?category=Hackathon" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Hackathons & Sprints
+                <Link to="/lawyers" className="flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-400">
+                  <Users className="h-3.5 w-3.5 text-blue-600" />
+                  Find Advocates
                 </Link>
               </li>
               <li>
-                <Link to="/events?category=Workshop" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Technical Workshops
+                <Link to="/contracts" className="flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-400">
+                  <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                  AI Contract Intelligence
                 </Link>
               </li>
               <li>
-                <Link to="/events?category=Cultural" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Cultural Festivals
+                <Link to="/cases" className="flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-400">
+                  <Briefcase className="h-3.5 w-3.5 text-amber-600" />
+                  Case Management Hub
                 </Link>
               </li>
               <li>
-                <Link to="/calendar" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Campus Calendar
+                <Link to="/services" className="flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-400">
+                  <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                  Fixed-Fee Legal Services
                 </Link>
               </li>
             </ul>
@@ -52,51 +61,50 @@ export const Footer: React.FC = () => {
           {/* Portals */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Portals
+              Portals & Access
             </h4>
             <ul className="mt-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
               <li>
-                <Link to="/student/login" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Student Portal
+                <Link to="/client/dashboard" className="hover:text-blue-700 dark:hover:text-blue-400">
+                  Client Portal
                 </Link>
               </li>
               <li>
-                <Link to="/organizer/login" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Organizer Studio
+                <Link to="/lawyer/dashboard" className="hover:text-blue-700 dark:hover:text-blue-400">
+                  Advocate Studio
                 </Link>
               </li>
               <li>
-                <Link to="/admin/login" className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline">
+                <Link to="/business/dashboard" className="hover:text-blue-700 dark:hover:text-blue-400">
+                  Enterprise Workspace
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/login" className="flex items-center gap-1 text-blue-700 dark:text-blue-400 hover:underline">
                   <Shield className="h-3.5 w-3.5" />
-                  Administration Portal
-                </Link>
-              </li>
-              <li>
-                <Link to="/verify-certificate" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-                  Certificate Verification
+                  Administration Command
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Institutional Note */}
+          {/* Security & Regulatory Note */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Institutional Governance
+              Compliance & Ethics
             </h4>
             <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              CampusPulse enforces role-based security, automated attendance QR validation, and auditable event moderation compliance.
+              JurisFlow operates in strict compliance with the Advocates Act, 1961. We provide secure technological infrastructure and do not solicit legal representation or practice law.
             </p>
             <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-400">
-              <span>Made with</span>
-              <Heart className="h-3.5 w-3.5 text-rose-500 fill-rose-500" />
-              <span>for University Campus Life</span>
+              <Shield className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Client-Attorney Privilege Encrypted</span>
             </div>
           </div>
         </div>
 
         <div className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-400 dark:border-slate-800">
-          © {new Date().getFullYear()} CampusPulse Event Management System. All university rights reserved.
+          © {new Date().getFullYear()} JurisFlow. Your Legal World, Organized in One Flow. All rights reserved.
         </div>
       </div>
     </footer>

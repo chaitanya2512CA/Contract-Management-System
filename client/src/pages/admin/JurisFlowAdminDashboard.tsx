@@ -17,7 +17,7 @@ import { adminService, verificationService, financialService } from '../../servi
 import { PlatformMetrics } from '../../types';
 import { Badge } from '../../components/common/Badge';
 
-export const ContractIQAdminDashboard: React.FC = () => {
+export const JurisFlowAdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [verificationQueue, setVerificationQueue] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
@@ -104,7 +104,7 @@ export const ContractIQAdminDashboard: React.FC = () => {
               </Badge>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              ContractIQ Institutional Governance • Bar Council verification, commission policies, and payouts
+              JurisFlow Institutional Governance • Bar Council verification, commission policies, and payouts
             </p>
           </div>
 

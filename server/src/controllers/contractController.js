@@ -491,7 +491,7 @@ export const chatWithContract = async (req, res) => {
         answer = `No governing law or exclusive jurisdiction clause is specified. This could lead to forum shopping and jurisdictional challenges if a dispute arises.`;
       }
     } else {
-      answer = `ContractIQ Legal AI Assessment for "${contract.title}": The document represents a ${contract.contract_type.toUpperCase()} contract with an AI risk rating of ${contract.ai_risk_score || 25}/100. Key terms include standard commercial covenants. For specific legal enforceability in your jurisdiction, we recommend sharing this document with a verified advocate on our marketplace.`;
+      answer = `JurisFlow Legal AI Assessment for "${contract.title}": The document represents a ${contract.contract_type.toUpperCase()} contract with an AI risk rating of ${contract.ai_risk_score || 25}/100. Key terms include standard commercial covenants. For specific legal enforceability in your jurisdiction, we recommend sharing this document with a verified advocate on our marketplace.`;
       citedClauses.push('General Terms & Conditions');
     }
 

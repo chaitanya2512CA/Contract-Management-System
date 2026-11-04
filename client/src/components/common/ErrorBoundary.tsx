@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[CampusPulse ErrorBoundary] Uncaught component exception:', error, errorInfo);
+    console.error('[JurisFlow ErrorBoundary] Uncaught component exception:', error, errorInfo);
   }
 
   public handleReset = () => {

@@ -1,6 +1,6 @@
-# ContractIQ — Neon PostgreSQL Database
+# JurisFlow — Neon PostgreSQL Database
 
-This directory contains the production-grade PostgreSQL schema and migration scripts for **Neon Serverless PostgreSQL** integration into the ContractIQ platform.
+This directory contains the production-grade PostgreSQL schema and migration scripts for **Neon Serverless PostgreSQL** integration into the JurisFlow platform.
 
 ## Directory Structure
 

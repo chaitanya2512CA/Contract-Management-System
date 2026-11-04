@@ -10,7 +10,7 @@ const api = axios.create({
 // Interceptor to attach JWT token to every outgoing request
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('campuspulse_token');
+    const token = localStorage.getItem('jurisflow_token') || localStorage.getItem('campuspulse_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,7 +31,9 @@ api.interceptors.response.use(
         !currentPath.includes('/register') &&
         currentPath !== '/'
       ) {
+        localStorage.removeItem('jurisflow_token');
         localStorage.removeItem('campuspulse_token');
+        localStorage.removeItem('jurisflow_user');
         localStorage.removeItem('campuspulse_user');
       }
     }
@@ -68,7 +70,7 @@ export const authService = {
     forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
 };
 
-/* ================= CONTRACTIQ LAWYER API ================= */
+/* ================= JURISFLOW LAWYER API ================= */
 export const lawyerService = {
   getLawyers: (params?: any) => api.get('/lawyers', { params }),
   getLawyerById: (id: string) => api.get(`/lawyers/${id}`),

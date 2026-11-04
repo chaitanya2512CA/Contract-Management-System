@@ -1,7 +1,7 @@
 {
-  "name": "campus-pulse",
+  "name": "jurisflow",
   "version": "1.0.0",
-  "description": "Modern College Event Management & Campus Activity Platform",
+  "description": "JurisFlow — Your Legal World, Organized in One Flow.",
   "type": "module",
   "scripts": {
     "install:all": "npm --prefix server install && npm --prefix client install",

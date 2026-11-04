@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  Scale,
   LayoutDashboard,
   Calendar,
   Award,
@@ -54,11 +55,11 @@ export const Sidebar: React.FC<{ onCloseMobile?: () => void }> = ({ onCloseMobil
     <aside className="flex h-full w-64 flex-col border-r border-slate-200/80 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       {/* Brand & Role Tag */}
       <div className="flex items-center gap-3 px-2 py-3 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-200 dark:shadow-none">
-          <Sparkles className="h-5 w-5" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm shadow-blue-200 dark:bg-blue-600 dark:shadow-none">
+          <Scale className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">CampusPulse</h2>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">JurisFlow</h2>
           <div className="mt-0.5">
             <Badge
               variant={role === 'admin' ? 'purple' : role === 'organizer' ? 'primary' : 'success'}

@@ -66,7 +66,7 @@ export const ClientDashboard: React.FC = () => {
               Welcome back, {user?.name || 'Client'}
             </h1>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              ContractIQ Legal Hub • Track consultations, AI contract reviews, and active case proceedings.
+              JurisFlow Legal Hub • Track consultations, AI contract reviews, and active case proceedings.
             </p>
           </div>
 

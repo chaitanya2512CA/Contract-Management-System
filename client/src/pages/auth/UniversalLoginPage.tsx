@@ -17,7 +17,7 @@ export const UniversalLoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect');
 
-  const [email, setEmail] = useState<string>('client@contractiq.com');
+  const [email, setEmail] = useState<string>('client@jurisflow.com');
   const [password, setPassword] = useState<string>('Client@12345');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,13 +67,13 @@ export const UniversalLoginPage: React.FC = () => {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-700 shadow-md">
               <Scale className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-black text-slate-900 dark:text-white">ContractIQ</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white">JurisFlow</span>
           </Link>
           <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Sign in to your legal account
+            Welcome to JurisFlow
           </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Access your consultations, AI contract reviews, and advocate workspace
+          <p className="mt-1 text-xs text-slate-500 font-medium">
+            Your Legal World, Organized in One Flow.
           </p>
         </div>
 
@@ -85,35 +85,35 @@ export const UniversalLoginPage: React.FC = () => {
           <div className="mt-2 grid grid-cols-3 gap-1.5 text-[11px] font-semibold">
             <button
               type="button"
-              onClick={() => handleQuickFill('client@contractiq.com', 'Client@12345')}
+              onClick={() => handleQuickFill('client@jurisflow.com', 'Client@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Client (Rahul)
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill('criminal.law@contractiq.com', 'Lawyer@12345')}
+              onClick={() => handleQuickFill('criminal.law@jurisflow.com', 'Lawyer@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Criminal Lawyer
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill('contract.law@contractiq.com', 'Lawyer@12345')}
+              onClick={() => handleQuickFill('contract.law@jurisflow.com', 'Lawyer@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Contract Lawyer
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill('family.law@contractiq.com', 'Lawyer@12345')}
+              onClick={() => handleQuickFill('family.law@jurisflow.com', 'Lawyer@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Family Lawyer
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill('business@contractiq.com', 'Business@12345')}
+              onClick={() => handleQuickFill('business@jurisflow.com', 'Business@12345')}
               className="rounded-xl border border-slate-100 bg-slate-50 py-1.5 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-800"
             >
               Enterprise CLM
@@ -140,7 +140,7 @@ export const UniversalLoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@contractiq.com"
+                  placeholder="name@jurisflow.com"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

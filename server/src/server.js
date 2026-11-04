@@ -15,9 +15,10 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`====================================================`);
-      console.log(` CampusPulse Event Hub API Server running on port ${PORT}`);
+      console.log(` JurisFlow Legal Ecosystem API Server running on port ${PORT}`);
       console.log(` Health check: http://localhost:${PORT}/api/health`);
-      console.log(` Admin Portal: http://localhost:5173/admin/login`);
+      console.log(` Admin Command: http://localhost:5173/admin/login
+      console.log(` Client Portal: http://localhost:5173/login`);`);
       console.log(` Student Portal: http://localhost:5173/student/login`);
       console.log(` Organizer Portal: http://localhost:5173/organizer/login`);
       console.log(`====================================================`);

@@ -64,14 +64,14 @@ app.get(['/api/health', '/health'], async (req, res) => {
     res.status(200).json({
       status,
       timestamp: new Date().toISOString(),
-      service: 'ContractIQ — AI Contract Lifecycle Management & Lawyer Marketplace API',
+      service: 'JurisFlow — Your Legal World, Organized in One Flow.',
       database: dbInfo,
     });
   } catch (err) {
     res.status(200).json({
       status: 'degraded',
       timestamp: new Date().toISOString(),
-      service: 'ContractIQ — AI Contract Lifecycle Management & Lawyer Marketplace API',
+      service: 'JurisFlow — Your Legal World, Organized in One Flow.',
       error: err.message,
     });
   }

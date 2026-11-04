@@ -1221,7 +1221,7 @@ export const exportAttendanceCSV = async (req, res) => {
 };
 
 /**
- * ContractIQ Platform Executive Metrics & KPIs
+ * JurisFlow Platform Executive Metrics & KPIs
  */
 export const getPlatformMetrics = async (req, res) => {
   try {

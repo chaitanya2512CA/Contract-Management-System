@@ -119,11 +119,11 @@ let isSchemaInitialized = false;
 
 // Global pool reuse for Vercel Serverless Functions
 const getActivePool = () => {
-  return global.__contractiqPgPool || global.__neonPgPool || null;
+  return global.__jurisflowPgPool || global.__neonPgPool || null;
 };
 
 const setActivePool = (p) => {
-  global.__contractiqPgPool = p;
+  global.__jurisflowPgPool = p;
   global.__neonPgPool = p;
 };
 

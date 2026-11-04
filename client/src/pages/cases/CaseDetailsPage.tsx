@@ -220,7 +220,7 @@ export const CaseDetailsPage: React.FC = () => {
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">Case Matter Background</h3>
               <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                {legalCase.summary || 'Initial case file opened on ContractIQ.'}
+                {legalCase.summary || 'Initial case file opened on JurisFlow.'}
               </p>
 
               <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-xs dark:border-slate-800">

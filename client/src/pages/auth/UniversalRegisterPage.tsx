@@ -73,14 +73,10 @@ export const UniversalRegisterPage: React.FC = () => {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-700 shadow-md">
               <Scale className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-black text-slate-900 dark:text-white">ContractIQ</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white">JurisFlow</span>
           </Link>
-          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Create your legal account
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Join thousands of clients, advocates, and enterprises on ContractIQ
-          </p>
+          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900 dark:text-white">Create your JurisFlow account</h2>
+          <p className="mt-1 text-xs text-slate-500 font-medium">Your Legal World, Organized in One Flow.</p>
         </div>
 
         {/* Role Selector Tabs */}

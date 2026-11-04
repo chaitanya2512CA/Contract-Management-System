@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
+  Scale,
   Shield,
   Lock,
   Mail,
@@ -73,19 +74,19 @@ export const AdminLoginPage: React.FC = () => {
         {/* Institutional Crest */}
         <div className="flex flex-col items-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-xl shadow-indigo-500/25 border border-indigo-400/30">
-            <Shield className="h-8 w-8 text-white" />
+            <Scale className="h-8 w-8 text-white" />
           </div>
 
           <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold tracking-wider uppercase text-indigo-300">
             <Lock className="h-3 w-3" />
-            Institutional Administration Portal
+            JurisFlow Administrator Portal
           </span>
 
           <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl font-serif">
-            CampusPulse Central Control
+            JurisFlow Command Center
           </h2>
-          <p className="mt-2 text-xs text-slate-400 max-w-sm">
-            Restricted access for designated university deans, provosts, and central system administrators.
+          <p className="mt-2 text-xs text-slate-400 max-w-sm font-medium">
+            Your Legal World, Organized in One Flow.
           </p>
         </div>
 
@@ -121,7 +122,7 @@ export const AdminLoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@contractiq.com"
+                  placeholder="admin@jurisflow.com"
                   className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-10 pr-3.5 text-xs text-white placeholder:text-slate-500 focus:border-indigo-500 focus:bg-slate-800 focus:outline-none"
                 />
               </div>

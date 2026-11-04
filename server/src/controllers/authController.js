@@ -286,7 +286,7 @@ export const loginStudent = async (req, res) => {
     await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
     const user = mapUser(row);
-    sendAuthResponse(user, 200, res, 'Welcome back to CampusPulse!');
+    sendAuthResponse(user, 200, res, 'Welcome back to JurisFlow!');
   } catch (error) {
     return handleAuthError(res, error, 'Student login');
   }
@@ -624,7 +624,7 @@ export const forgotPassword = async (req, res) => {
 };
 
 /**
- * Universal Login for ContractIQ
+ * Universal Login for JurisFlow
  * Handles client, lawyer, business, and admin authentication
  */
 export const login = async (req, res) => {
@@ -670,7 +670,7 @@ export const login = async (req, res) => {
 };
 
 /**
- * Universal Registration for ContractIQ
+ * Universal Registration for JurisFlow
  * Supports client, lawyer, and business registration
  */
 export const register = async (req, res) => {

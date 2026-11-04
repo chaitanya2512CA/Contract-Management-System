@@ -305,7 +305,7 @@ export const BusinessDashboard: React.FC = () => {
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 text-slate-900 dark:text-white my-8">
             <h3 className="text-base font-bold">Create or Upload Contract for AI Review</h3>
             <p className="mt-1 text-xs text-slate-500">
-              ContractIQ AI will analyze text for uncapped liabilities, non-compete risks, and generate redline
+              JurisFlow AI will analyze text for uncapped liabilities, non-compete risks, and generate redline
               suggestions.
             </p>
 
