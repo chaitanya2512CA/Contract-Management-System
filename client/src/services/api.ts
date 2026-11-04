@@ -66,9 +66,6 @@ export const authService = {
   changePassword: (data: any) => api.put('/auth/change-password', data),
 
     forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
-
-  supabaseSync: (data: { supabaseToken?: string; role?: string; metadata?: any }) =>
-    api.post('/auth/supabase-sync', data),
 };
 
 /* ================= CONTRACTIQ LAWYER API ================= */

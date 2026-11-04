@@ -20,7 +20,6 @@ import {
   Info,
 } from 'lucide-react';
 import { consultationService, reviewService } from '../../services/api';
-import { subscribeToMessages } from '../../services/supabase';
 import { ConsultationBooking, ChatMessage } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/common/Badge';
@@ -82,17 +81,19 @@ export const ConsultationRoomPage: React.FC = () => {
     fetchConsultationData();
   }, [id]);
 
-  // Real-time chat updates via Supabase Realtime
+  // Real-time chat updates via periodic polling
   useEffect(() => {
     if (!id) return;
-    const unsubscribe = subscribeToMessages(id, (newMsg: any) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === newMsg.id)) return prev;
-        return [...prev, newMsg];
-      });
-    });
+    const pollInterval = setInterval(async () => {
+      try {
+        const msgRes = await consultationService.getMessages(id);
+        if (msgRes.data?.success && Array.isArray(msgRes.data.messages)) {
+          setMessages(msgRes.data.messages);
+        }
+      } catch (_) {}
+    }, 3000);
     return () => {
-      unsubscribe();
+      clearInterval(pollInterval);
     };
   }, [id]);
 

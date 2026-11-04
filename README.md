@@ -83,7 +83,7 @@ The platform is pre-seeded with realistic data across all user personas. All log
 - **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, React Router v6.
 - **Backend**: Node.js, Express.js, JWT session security, bcrypt password hashing, Multer file handling.
 - **Database Architecture**:
-  - PostgreSQL via Neon / Supabase in production.
+  - Serverless PostgreSQL via Neon in production.
   - Zero-config high-performance `pg-mem` fallback in local development (auto-boots with 25+ relational tables and realistic seed data without requiring local database daemons).
 - **Payments**: Razorpay Node SDK with HMAC-SHA256 signature verification and developer sandbox instant test checkout.
 - **Deployment**: Vercel-ready with `vercel.json` SPA routing rewrites and `api/index.js` serverless handler.

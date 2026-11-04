@@ -1,10 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { query, mapUser } from '../config/db.js';
-import { verifySupabaseToken } from '../config/supabase.js';
 
 /**
  * Universal Protection Middleware:
- * Supports both ContractIQ custom JWT tokens and native Supabase Auth access tokens.
+ * Verifies JWT tokens and attaches authenticated user from Neon PostgreSQL.
  */
 export const protect = async (req, res, next) => {
   try {
@@ -24,9 +23,7 @@ export const protect = async (req, res, next) => {
     }
 
     let userId = null;
-    let userEmail = null;
 
-    // 1. Attempt verification with internal ContractIQ JWT secret
     try {
       const decoded = jwt.verify(
         token,
@@ -34,57 +31,21 @@ export const protect = async (req, res, next) => {
       );
       userId = decoded.id;
     } catch (jwtErr) {
-      // 2. If internal JWT fails, attempt Supabase Auth validation
-      try {
-        const supabaseUser = await verifySupabaseToken(token);
-        if (supabaseUser) {
-          userId = supabaseUser.id;
-          userEmail = supabaseUser.email;
-        } else {
-          // Alternatively decode unverified for claims inspection if service key is offline
-          const unverified = jwt.decode(token);
-          if (unverified && (unverified.sub || unverified.email) && unverified.iss?.includes('supabase')) {
-            userId = unverified.sub;
-            userEmail = unverified.email;
-          }
-        }
-      } catch (sbErr) {
-        // Fall through to invalid session
-      }
-    }
-
-    if (!userId && !userEmail) {
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired session. Please log in again.',
       });
     }
 
-    // 3. Resolve user record from PostgreSQL
-    let userRes;
-    if (userId && userEmail) {
-      userRes = await query(
-        'SELECT * FROM users WHERE id = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
-        [userId, userEmail]
-      );
-    } else if (userId) {
-      userRes = await query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
-    } else {
-      userRes = await query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [userEmail]);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid session payload. Please log in again.',
+      });
     }
 
-    // 4. Auto-provision profile/user from Supabase Auth if record doesn't exist yet
-    if (userRes.rows.length === 0 && userEmail) {
-      const newId = userId || crypto.randomUUID();
-      await query(
-        `INSERT INTO users (id, name, email, role, is_active)
-         VALUES ($1, $2, $3, 'client', true)
-         ON CONFLICT (email) DO UPDATE SET is_active = true
-         RETURNING *`,
-        [newId, userEmail.split('@')[0], userEmail.toLowerCase()]
-      );
-      userRes = await query('SELECT * FROM users WHERE id = $1 OR LOWER(email) = LOWER($2) LIMIT 1', [newId, userEmail]);
-    }
+    // Resolve user record from PostgreSQL
+    const userRes = await query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
 
     if (userRes.rows.length === 0) {
       return res.status(401).json({

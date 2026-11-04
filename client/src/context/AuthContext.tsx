@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { authService } from '../services/api';
-import { supabase } from '../services/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -16,9 +15,6 @@ interface AuthContextType {
   loginAdmin: (creds: { email: string; password: string }) => Promise<User>;
   registerStudent: (data: any) => Promise<User>;
   registerOrganizer: (data: any) => Promise<User>;
-  signInWithSupabase: (email: string, password: string) => Promise<User>;
-  signUpWithSupabase: (data: { email: string; password: string; name: string; role?: UserRole; [key: string]: any }) => Promise<any>;
-  signOutWithSupabase: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
@@ -73,21 +69,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Check active Supabase session if available
-      try {
-        const { data: sbSession } = await supabase.auth.getSession();
-        if (mounted && sbSession?.session?.access_token && !savedToken) {
-          const tokenStr = sbSession.session.access_token;
-          const syncRes = await authService.supabaseSync({
-            supabaseToken: tokenStr,
-            metadata: sbSession.session.user.user_metadata,
-          });
-          if (syncRes.data.success && syncRes.data.user) {
-            handleAuthSuccess(syncRes.data);
-          }
-        }
-      } catch (_) {}
-
       if (mounted) {
         setIsLoading(false);
       }
@@ -95,31 +76,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth();
 
-    // Listen to Supabase Auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.access_token) {
-        try {
-          const syncRes = await authService.supabaseSync({
-            supabaseToken: session.access_token,
-            metadata: session.user.user_metadata,
-          });
-          if (mounted && syncRes.data.success && syncRes.data.user) {
-            handleAuthSuccess(syncRes.data);
-          }
-        } catch (_) {}
-      } else if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('campuspulse_token');
-        localStorage.removeItem('campuspulse_user');
-        if (mounted) {
-          setUser(null);
-          setToken(null);
-        }
-      }
-    });
-
     return () => {
       mounted = false;
-      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -158,78 +116,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return handleAuthSuccess(res.data);
   };
 
-  const signInWithSupabase = async (email: string, password: string): Promise<User> => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      throw new Error(error.message);
-    }
-    if (!data.session?.access_token) {
-      throw new Error('Supabase authentication succeeded but no session token was issued.');
-    }
-
-    const syncRes = await authService.supabaseSync({
-      supabaseToken: data.session.access_token,
-      metadata: data.user?.user_metadata,
-    });
-
-    return handleAuthSuccess(syncRes.data);
-  };
-
-  const signUpWithSupabase = async (formData: {
-    email: string;
-    password: string;
-    name: string;
-    role?: UserRole;
-    [key: string]: any;
-  }) => {
-    const { email, password, name, role = 'client', ...extra } = formData;
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-          name,
-          role,
-          ...extra,
-        },
-      },
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data.session?.access_token) {
-      const syncRes = await authService.supabaseSync({
-        supabaseToken: data.session.access_token,
-        role,
-        metadata: data.user?.user_metadata,
-      });
-      return handleAuthSuccess(syncRes.data);
-    }
-
-    const backendRes = await authService.register({
-      name,
-      email,
-      password,
-      role,
-      ...extra,
-    });
-    return handleAuthSuccess(backendRes.data);
-  };
-
-  const signOutWithSupabase = async () => {
-    await supabase.auth.signOut();
-    logout();
-  };
-
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) {
-      throw new Error(error.message);
+    const res = await authService.forgotPassword(email);
+    if (res.data && !res.data.success) {
+      throw new Error(res.data.message || 'Failed to request password reset.');
     }
   };
 
@@ -262,9 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAdmin,
         registerStudent,
         registerOrganizer,
-        signInWithSupabase,
-        signUpWithSupabase,
-        signOutWithSupabase,
         resetPassword,
         logout,
         updateUser,

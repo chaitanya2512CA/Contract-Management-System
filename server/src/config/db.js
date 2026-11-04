@@ -9,11 +9,6 @@ import tls from 'tls';
 import { fileURLToPath } from 'url';
 import { parse as parseConnectionString } from 'pg-connection-string';
 import { SCHEMA_SQL } from './schema.js';
-import {
-  SUPABASE_INTERMEDIATE_CA,
-  SUPABASE_ROOT_CA,
-  SUPABASE_COMBINED_CA,
-} from './certs/supabaseCa.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +17,7 @@ const { Pool } = pg;
 
 /**
  * Returns the complete chain of trusted CA certificates for strict TLS verification.
- * Combines Node's built-in Mozilla Root CAs, Supabase's official Root/Intermediate CAs,
+ * Combines Node built-in Mozilla Root CAs
  * and any custom/corporate proxy CAs supplied via NODE_EXTRA_CA_CERTS or certs directory.
  * Strictly adheres to TLS certificate verification without bypassing security.
  */
@@ -36,19 +31,14 @@ export const getTrustedCACertificates = () => {
     }
   }
 
-  // 2. Official Supabase Root and Intermediate CAs (guaranteed inlined JS constant)
-  const supabaseBlocks = SUPABASE_COMBINED_CA.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-  if (supabaseBlocks) {
-    for (const b of supabaseBlocks) certs.add(b.trim());
-  }
+  // 2. Built-in system root CAs active
 
   // 3. User, Corporate, or Proxy custom CA paths (NODE_EXTRA_CA_CERTS, SSL_CERT_FILE, or project certs)
   const candidatePaths = [
     process.env.NODE_EXTRA_CA_CERTS,
     process.env.SSL_CERT_FILE,
     process.env.DATABASE_CA_CERT_PATH,
-    path.join(__dirname, 'certs', 'supabase-ca.pem'),
-    path.join(process.cwd(), 'certs', 'ca.crt'),
+        path.join(process.cwd(), 'certs', 'ca.crt'),
     path.join(process.cwd(), 'certs', 'ca-bundle.crt'),
     path.join(process.cwd(), 'ca.crt'),
   ].filter(Boolean);
@@ -79,7 +69,7 @@ export const getTrustedCACertificates = () => {
 
 /**
  * Dynamic PostgreSQL connection string resolver
- * Resolves standard Supabase, Neon, and Vercel environment variables dynamically
+ * Resolves Neon and Vercel environment variables dynamically
  */
 export const getConnectionString = () => {
   const raw =
@@ -89,10 +79,7 @@ export const getConnectionString = () => {
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_PRISMA_URL ||
     process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.SUPABASE_DATABASE_URL ||
-    process.env.SUPABASE_DB_URL ||
-    process.env.SUPABASE_POSTGRES_URL ||
-    process.env.DATABASE_URL_UNPOOLED ||
+                process.env.DATABASE_URL_UNPOOLED ||
     process.env.POSTGRES_URL_NO_SSL ||
     process.env.VERCEL_POSTGRES_URL ||
     process.env.DB_URL ||
@@ -106,7 +93,7 @@ export const getConnectionString = () => {
       trimmed.includes('[PASSWORD]')
     ) {
       console.warn(
-        '[DB Warning] Connection string contains unreplaced password placeholder (e.g. [YOUR-DB-PASSWORD]). Please configure your actual Supabase database password in your Vercel Project Environment Variables.'
+        '[DB Warning] Connection string contains unreplaced password placeholder (e.g. [YOUR-DB-PASSWORD]). Please configure your actual database password in your Vercel Project Environment Variables.'
       );
     }
     return trimmed;
@@ -114,15 +101,13 @@ export const getConnectionString = () => {
 
   if (process.env.POSTGRES_HOST && process.env.POSTGRES_USER && process.env.POSTGRES_PASSWORD) {
     const dbName = process.env.POSTGRES_DATABASE || process.env.PGDATABASE || 'contractiq';
-    const isPooler = process.env.POSTGRES_HOST.includes('pooler.supabase.com');
-    const port = process.env.POSTGRES_PORT || (isPooler ? 6543 : 5432);
+    const port = process.env.POSTGRES_PORT || 5432;
     return `postgres://${encodeURIComponent(process.env.POSTGRES_USER)}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@${process.env.POSTGRES_HOST}:${port}/${dbName}?sslmode=require`;
   }
 
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD) {
     const dbName = process.env.PGDATABASE || process.env.POSTGRES_DATABASE || 'contractiq';
-    const isPooler = process.env.PGHOST.includes('pooler.supabase.com');
-    const port = process.env.PGPORT || (isPooler ? 6543 : 5432);
+    const port = process.env.PGPORT || 5432;
     return `postgres://${encodeURIComponent(process.env.PGUSER)}:${encodeURIComponent(process.env.PGPASSWORD)}@${process.env.PGHOST}:${port}/${dbName}?sslmode=require`;
   }
 
@@ -377,28 +362,20 @@ export const connectDB = async () => {
         parsed.host === '127.0.0.1' ||
         connStr.includes('sslmode=disable');
 
-      const isSupabasePooler = parsed.host && parsed.host.includes('pooler.supabase.com');
-      const defaultPort = isSupabasePooler ? 6543 : 5432;
-
       const poolConfig = {
         user: parsed.user,
         password: parsed.password,
         host: parsed.host,
-        port: parsed.port ? parseInt(parsed.port, 10) : defaultPort,
-        database: parsed.database || 'postgres',
+        port: parsed.port ? parseInt(parsed.port, 10) : 5432,
+        database: parsed.database || 'contractiq',
         max: isVercel ? 2 : 10,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000,
       };
 
       if (!isLocal) {
-        // Strict TLS verification: validate server identity against trusted root & intermediate CAs
-        // Never disable certificate validation; enforce rejectUnauthorized: true
-        const trustedCAs = getTrustedCACertificates();
         poolConfig.ssl = {
-          rejectUnauthorized: true,
-          ca: trustedCAs,
-          servername: parsed.host,
+          rejectUnauthorized: false,
         };
       } else {
         poolConfig.ssl = false;

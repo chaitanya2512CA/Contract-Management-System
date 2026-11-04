@@ -1,4 +1,3 @@
-import { ensureStorageBuckets } from './config/supabase.js';
 import dotenv from 'dotenv';
 import app from './app.js';
 import { connectDB } from './config/db.js';
@@ -13,7 +12,6 @@ const startServer = async () => {
   try {
     await connectDB();
     await ensureDemoAccounts();
-    ensureStorageBuckets().catch(() => {});
 
     app.listen(PORT, () => {
       console.log(`====================================================`);

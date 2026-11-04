@@ -1,4 +1,3 @@
-import { verifySupabaseToken } from '../config/supabase.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -41,38 +40,31 @@ export const handleAuthError = (res, error, operation = 'Authentication') => {
     routine: error.routine,
     message: error.message,
     name: error.name,
-    stack: error.stack,
   });
 
-  if (error.code === '23505') {
+  if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('already exists')) {
     return res.status(409).json({
       success: false,
       message: 'An account with this email address already exists. Please sign in.',
     });
   }
 
-  const isTlsOrConnError =
-    error.code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
-    error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
-    error.code === 'CERT_HAS_EXPIRED' ||
+  const isConnError =
     error.code === 'ECONNREFUSED' ||
     error.code === 'ETIMEDOUT' ||
     error.code === 'EAI_AGAIN' ||
-    error.code === 'ENOTFOUND' ||
-    error.message?.includes('certificate') ||
-    error.message?.includes('connection') ||
-    error.message?.includes('DATABASE_URL');
+    error.code === 'ENOTFOUND';
 
-  if (isTlsOrConnError) {
+  if (isConnError) {
     return res.status(503).json({
       success: false,
-      message: 'Database service is temporarily unavailable or requires verified SSL certificate configuration. Please check database connectivity.',
+      message: 'Database connection error. Please check database connectivity.',
     });
   }
 
   return res.status(500).json({
     success: false,
-    message: `${operation} failed. Please try again.`,
+    message: error.message || `${operation} failed. Please try again.`,
   });
 };
 
@@ -791,50 +783,3 @@ export const register = async (req, res) => {
   }
 };
 
-/**
- * Supabase Auth Session Synchronization
- * Syncs Supabase user credentials & profile into PostgreSQL backend
- */
-export const supabaseSync = async (req, res) => {
-  try {
-    const { supabaseToken, role, metadata } = req.body;
-    let authUser = null;
-    if (supabaseToken) {
-      authUser = await verifySupabaseToken(supabaseToken);
-    }
-    if (!authUser && req.user) {
-      authUser = { id: req.user.id, email: req.user.email, user_metadata: metadata || {} };
-    }
-    if (!authUser) {
-      return res.status(401).json({ success: false, message: 'Invalid or missing Supabase session.' });
-    }
-
-    const email = authUser.email.toLowerCase();
-    const name = authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0];
-    const userRole = role || authUser.user_metadata?.role || 'client';
-
-    let userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
-    if (userRes.rows.length === 0) {
-      const newId = authUser.id || crypto.randomUUID();
-      await query(
-        `INSERT INTO users (id, name, email, role, phone, is_active)
-         VALUES ($1, $2, $3, $4, $5, true)`,
-        [newId, name, email, userRole, authUser.user_metadata?.phone || '']
-      );
-      try {
-        await query(
-          `INSERT INTO profiles (id, auth_user_id, email, full_name, role, phone)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name`,
-          [newId, authUser.id, email, name, userRole, authUser.user_metadata?.phone || '']
-        );
-      } catch (_) {}
-      userRes = await query('SELECT * FROM users WHERE id = $1', [newId]);
-    }
-
-    const user = mapUser(userRes.rows[0]);
-    sendAuthResponse(user, 200, res, 'Supabase session synchronized successfully.');
-  } catch (error) {
-    return handleAuthError(res, error, 'Supabase session synchronization');
-  }
-};

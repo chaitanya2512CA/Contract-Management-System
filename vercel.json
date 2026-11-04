@@ -6,7 +6,6 @@
   "framework": "vite",
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/src/config/certs/**",
       "maxDuration": 30
     }
   },
