@@ -33,6 +33,44 @@ const sendAuthResponse = (user, statusCode, res, message = 'Authenticated succes
   });
 };
 
+// Column introspection and idempotent migration helper
+let usersColumnsCache = null;
+let lastColumnCheck = 0;
+
+export const getUsersColumns = async () => {
+  const now = Date.now();
+  if (usersColumnsCache && (now - lastColumnCheck < 60000)) {
+    return usersColumnsCache;
+  }
+  try {
+    const res = await query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users'"
+    );
+    if (res && res.rows && res.rows.length > 0) {
+      usersColumnsCache = new Set(res.rows.map((r) => r.column_name.toLowerCase()));
+      lastColumnCheck = now;
+      return usersColumnsCache;
+    }
+  } catch (err) {
+    console.warn('[Auth Warning] Could not inspect users table columns:', err.message);
+  }
+  return usersColumnsCache || new Set();
+};
+
+export const ensureLastLoginAtMigration = async () => {
+  try {
+    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    if (usersColumnsCache) {
+      usersColumnsCache.add('last_login_at');
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Auth Warning] Column migration notice:', err.message);
+    return false;
+  }
+};
+
 // Centralized authentication and registration error handler
 export const handleAuthError = (res, error, operation = 'Authentication') => {
   console.error(`[Auth Diagnostic] ${operation} error:`, {
@@ -118,26 +156,77 @@ export const registerStudent = async (req, res) => {
     const passwordHash = await bcrypt.hash(pwdCheck.value, salt);
     const id = crypto.randomUUID();
 
-    const insertRes = await query(
-      `INSERT INTO users (
-        id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests,
-        is_active, last_login, last_login_at, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW(), NOW())
-       RETURNING *`,
-      [
-        id,
-        nameCheck.value,
-        emailCheck.value,
-        passwordHash,
-        idCheck.value || '',
-        deptCheck.value || 'General Engineering',
-        graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
-        phoneCheck.value || '',
-        JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
-      ]
-    );
+    await ensureLastLoginAtMigration();
+    const cols = await getUsersColumns();
+    const hasLastLoginAt = cols.has('last_login_at');
 
-    console.log("DB Insert/Update user registration:", id, 'student');
+    let insertRes;
+    try {
+      if (hasLastLoginAt) {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests,
+            is_active, last_login, last_login_at, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            idCheck.value || '',
+            deptCheck.value || 'General Engineering',
+            graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
+            phoneCheck.value || '',
+            JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
+          ]
+        );
+      } else {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests,
+            is_active, last_login, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            idCheck.value || '',
+            deptCheck.value || 'General Engineering',
+            graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
+            phoneCheck.value || '',
+            JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
+          ]
+        );
+      }
+    } catch (insertErr) {
+      if (insertErr.message?.includes('last_login_at') || insertErr.message?.includes('column "last_login_at"')) {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, student_id, department, graduation_year, phone, interests,
+            is_active, last_login, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            idCheck.value || '',
+            deptCheck.value || 'General Engineering',
+            graduationYear ? Number(graduationYear) : new Date().getFullYear() + 2,
+            phoneCheck.value || '',
+            JSON.stringify(Array.isArray(interests) && interests.length > 0 ? interests : ['Technology', 'Hackathons']),
+          ]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
+    console.log('DB Insert/Update user registration:', id, 'student');
 
     // Audit Log for Student Registration
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
@@ -148,13 +237,13 @@ export const registerStudent = async (req, res) => {
         [crypto.randomUUID(), id, emailCheck.value, id, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs student register):", auditErr);
+      console.error('Auth DB Error (audit_logs student register):', auditErr);
     }
 
     const user = mapUser(insertRes.rows[0]);
     sendAuthResponse(user, 201, res, 'Student account registered successfully.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     if (error.code === '23505') {
       return res.status(400).json({
         success: false,
@@ -219,25 +308,74 @@ export const registerOrganizer = async (req, res) => {
     const passwordHash = await bcrypt.hash(pwdCheck.value, salt);
     const id = crypto.randomUUID();
 
-    const insertRes = await query(
-      `INSERT INTO users (
-        id, name, email, password_hash, role, employee_id, department, organization_name, phone,
-        is_active, last_login, last_login_at, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true, NOW(), NOW(), NOW(), NOW())
-       RETURNING *`,
-      [
-        id,
-        nameCheck.value,
-        emailCheck.value,
-        passwordHash,
-        empCheck.value || '',
-        deptCheck.value || 'Student Affairs',
-        orgCheck.value,
-        phoneCheck.value || '',
-      ]
-    );
+    await ensureLastLoginAtMigration();
+    const cols = await getUsersColumns();
+    const hasLastLoginAt = cols.has('last_login_at');
 
-    console.log("DB Insert/Update user registration:", id, 'organizer');
+    let insertRes;
+    try {
+      if (hasLastLoginAt) {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, employee_id, department, organization_name, phone,
+            is_active, last_login, last_login_at, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true, NOW(), NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            empCheck.value || '',
+            deptCheck.value || 'Student Affairs',
+            orgCheck.value,
+            phoneCheck.value || '',
+          ]
+        );
+      } else {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, employee_id, department, organization_name, phone,
+            is_active, last_login, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true, NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            empCheck.value || '',
+            deptCheck.value || 'Student Affairs',
+            orgCheck.value,
+            phoneCheck.value || '',
+          ]
+        );
+      }
+    } catch (insertErr) {
+      if (insertErr.message?.includes('last_login_at') || insertErr.message?.includes('column "last_login_at"')) {
+        insertRes = await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, employee_id, department, organization_name, phone,
+            is_active, last_login, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 'organizer', $5, $6, $7, $8, true, NOW(), NOW(), NOW())
+           RETURNING *`,
+          [
+            id,
+            nameCheck.value,
+            emailCheck.value,
+            passwordHash,
+            empCheck.value || '',
+            deptCheck.value || 'Student Affairs',
+            orgCheck.value,
+            phoneCheck.value || '',
+          ]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
+    console.log('DB Insert/Update user registration:', id, 'organizer');
 
     // Audit Log for Organizer Registration
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
@@ -248,13 +386,13 @@ export const registerOrganizer = async (req, res) => {
         [crypto.randomUUID(), id, emailCheck.value, id, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs organizer register):", auditErr);
+      console.error('Auth DB Error (audit_logs organizer register):', auditErr);
     }
 
     const user = mapUser(insertRes.rows[0]);
     sendAuthResponse(user, 201, res, 'Organizer account registered successfully.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     if (error.code === '23505') {
       return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
     }
@@ -323,15 +461,15 @@ export const loginStudent = async (req, res) => {
         [row.id]
       );
     } catch (updateErr) {
-      console.error("Auth DB Error (student login timestamp):", updateErr);
+      console.warn('Auth DB Note (student login timestamp update):', updateErr.message);
       try {
-        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+        await query('UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = $1', [row.id]);
       } catch (fbErr) {
-        console.error("Auth DB Error (fallback student login timestamp):", fbErr);
+        console.error('Auth DB Error (fallback student login timestamp):', fbErr);
       }
     }
 
-    console.log("DB Insert/Update user login:", row.id, row.role);
+    console.log('DB Insert/Update user login:', row.id, row.role);
 
     // Audit Log for Student Login
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
@@ -342,13 +480,13 @@ export const loginStudent = async (req, res) => {
         [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs student login):", auditErr);
+      console.error('Auth DB Error (audit_logs student login):', auditErr);
     }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Welcome back to JurisFlow!');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     return handleAuthError(res, error, 'Student login');
   }
 };
@@ -414,15 +552,15 @@ export const loginOrganizer = async (req, res) => {
         [row.id]
       );
     } catch (updateErr) {
-      console.error("Auth DB Error (organizer login timestamp):", updateErr);
+      console.warn('Auth DB Note (organizer login timestamp update):', updateErr.message);
       try {
-        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+        await query('UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = $1', [row.id]);
       } catch (fbErr) {
-        console.error("Auth DB Error (fallback organizer login timestamp):", fbErr);
+        console.error('Auth DB Error (fallback organizer login timestamp):', fbErr);
       }
     }
 
-    console.log("DB Insert/Update user login:", row.id, row.role);
+    console.log('DB Insert/Update user login:', row.id, row.role);
 
     // Audit Log for Organizer Login
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
@@ -433,13 +571,13 @@ export const loginOrganizer = async (req, res) => {
         [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs organizer login):", auditErr);
+      console.error('Auth DB Error (audit_logs organizer login):', auditErr);
     }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Organizer portal authentication successful.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     return handleAuthError(res, error, 'Organizer login');
   }
 };
@@ -485,7 +623,7 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    // STRICT CHECK: Student or Organizer CANNOT log in through the admin portal
+    // STRICT CHECK: Non-admin CANNOT log in through the admin portal
     if (row.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -507,15 +645,15 @@ export const loginAdmin = async (req, res) => {
         [row.id]
       );
     } catch (updateErr) {
-      console.error("Auth DB Error (update admin login timestamp):", updateErr);
+      console.warn('Auth DB Note (admin login timestamp update):', updateErr.message);
       try {
-        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+        await query('UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = $1', [row.id]);
       } catch (fbErr) {
-        console.error("Auth DB Error (fallback admin login timestamp):", fbErr);
+        console.error('Auth DB Error (fallback admin login timestamp):', fbErr);
       }
     }
 
-    console.log("DB Insert/Update user login:", row.id, row.role);
+    console.log('DB Insert/Update user login:', row.id, row.role);
 
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
 
@@ -527,7 +665,7 @@ export const loginAdmin = async (req, res) => {
         [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
       );
     } catch (adminLogErr) {
-      console.error("Auth DB Error (admin_logs on loginAdmin):", adminLogErr);
+      console.error('Auth DB Error (admin_logs on loginAdmin):', adminLogErr);
     }
 
     // Record audit_logs entry (awaited properly)
@@ -538,13 +676,13 @@ export const loginAdmin = async (req, res) => {
         [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs on loginAdmin):", auditErr);
+      console.error('Auth DB Error (audit_logs on loginAdmin):', auditErr);
     }
 
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Administrator portal authentication successful.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     return handleAuthError(res, error, 'Administrator login');
   }
 };
@@ -584,15 +722,15 @@ export const login = async (req, res) => {
         [row.id]
       );
     } catch (updateErr) {
-      console.error("Auth DB Error (update login timestamp):", updateErr);
+      console.warn('Auth DB Note (login timestamp update):', updateErr.message);
       try {
-        await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+        await query('UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = $1', [row.id]);
       } catch (fbErr) {
-        console.error("Auth DB Error (fallback login timestamp):", fbErr);
+        console.error('Auth DB Error (fallback login timestamp):', fbErr);
       }
     }
 
-    console.log("DB Insert/Update user login:", row.id, row.role);
+    console.log('DB Insert/Update user login:', row.id, row.role);
 
     // 2. Insert audit/admin log
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
@@ -604,7 +742,7 @@ export const login = async (req, res) => {
           [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
         );
       } catch (adminLogErr) {
-        console.error("Auth DB Error (admin_logs in universal login):", adminLogErr);
+        console.error('Auth DB Error (admin_logs in universal login):', adminLogErr);
       }
 
       try {
@@ -614,7 +752,7 @@ export const login = async (req, res) => {
           [crypto.randomUUID(), row.id, cleanEmail, row.id, clientIp]
         );
       } catch (auditErr) {
-        console.error("Auth DB Error (audit_logs in universal login admin):", auditErr);
+        console.error('Auth DB Error (audit_logs in universal login admin):', auditErr);
       }
     } else {
       try {
@@ -624,7 +762,7 @@ export const login = async (req, res) => {
           [crypto.randomUUID(), row.id, cleanEmail, row.id, `User logged in with role ${row.role}`, clientIp]
         );
       } catch (auditErr) {
-        console.error("Auth DB Error (audit_logs in user login):", auditErr);
+        console.error('Auth DB Error (audit_logs in user login):', auditErr);
       }
     }
 
@@ -638,13 +776,13 @@ export const login = async (req, res) => {
           user.lawyerProfile = lawyerRes.rows[0];
         }
       } catch (lawyerErr) {
-        console.error("Auth DB Error (fetching lawyerProfile in login):", lawyerErr);
+        console.error('Auth DB Error (fetching lawyerProfile in login):', lawyerErr);
       }
     }
 
     sendAuthResponse(user, 200, res, 'Logged in successfully.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     return handleAuthError(res, error, 'Universal login');
   }
 };
@@ -673,7 +811,7 @@ export const register = async (req, res) => {
       consultationFee15 = 499,
       consultationFee30 = 899,
       consultationFee60 = 1499,
-      bio = ''
+      bio = '',
     } = req.body;
 
     if (!name || !email || !password) {
@@ -693,34 +831,70 @@ export const register = async (req, res) => {
     const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
     const assignedRole = allowedRoles.includes(role) ? role : 'client';
 
-    // 1. Explicitly insert all required fields into primary users table
-    await query(
-      `INSERT INTO users (
-        id, name, email, password_hash, role, phone, company_name, city, state, bio,
-        is_active, last_login, last_login_at, created_at, updated_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        true, NOW(), NOW(), NOW(), NOW()
-      )`,
-      [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
-    );
+    // Ensure last_login_at migration has applied and check columns
+    await ensureLastLoginAtMigration();
+    const cols = await getUsersColumns();
+    const hasLastLoginAt = cols.has('last_login_at');
 
-    console.log("DB Insert/Update user registration:", userId, assignedRole);
+    // 1. Explicitly insert all required fields into primary users table (with defensive fallback)
+    try {
+      if (hasLastLoginAt) {
+        await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, phone, company_name, city, state, bio,
+            is_active, last_login, last_login_at, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            true, NOW(), NOW(), NOW(), NOW()
+          )`,
+          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+        );
+      } else {
+        await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, phone, company_name, city, state, bio,
+            is_active, last_login, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            true, NOW(), NOW(), NOW()
+          )`,
+          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+        );
+      }
+    } catch (insertErr) {
+      if (insertErr.message?.includes('last_login_at') || insertErr.message?.includes('column "last_login_at"')) {
+        console.warn('[Auth Warning] last_login_at not available on live table, using fallback insert:', insertErr.message);
+        await query(
+          `INSERT INTO users (
+            id, name, email, password_hash, role, phone, company_name, city, state, bio,
+            is_active, last_login, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            true, NOW(), NOW(), NOW()
+          )`,
+          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
+    console.log('DB Insert/Update user registration:', userId, assignedRole);
 
     // 2. Sync into profiles table
     try {
       await query(
         `INSERT INTO profiles (
           id, email, full_name, role, phone, company_name, city, state, bio, is_active,
-          last_login, last_login_at, created_at, updated_at
+          last_login, created_at, updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, true,
-          NOW(), NOW(), NOW(), NOW()
+          NOW(), NOW(), NOW()
         ) ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, updated_at = NOW()`,
         [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
       );
     } catch (profileErr) {
-      console.error("Auth DB Error (profiles sync):", profileErr);
+      console.error('Auth DB Error (profiles sync):', profileErr.message);
     }
 
     // 3. If registered as advocate/lawyer, create lawyer_profiles and availability schedule
@@ -753,7 +927,7 @@ export const register = async (req, res) => {
           JSON.stringify(['chat', 'audio', 'video']),
           bio,
           city,
-          state
+          state,
         ]
       );
       lawyerProfile = lawyerRes.rows[0];
@@ -767,7 +941,7 @@ export const register = async (req, res) => {
             [crypto.randomUUID(), profileId, day]
           );
         } catch (availErr) {
-          console.error("Auth DB Error (availability schedules):", availErr);
+          console.error('Auth DB Error (availability schedules):', availErr.message);
         }
       }
     }
@@ -781,7 +955,7 @@ export const register = async (req, res) => {
         [crypto.randomUUID(), userId, cleanEmail, userId, `User registration with role ${assignedRole}`, clientIp]
       );
     } catch (auditErr) {
-      console.error("Auth DB Error (audit_logs on registration):", auditErr);
+      console.error('Auth DB Error (audit_logs on registration):', auditErr.message);
     }
 
     const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -792,7 +966,7 @@ export const register = async (req, res) => {
 
     sendAuthResponse(user, 201, res, 'Account registered successfully.');
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     return handleAuthError(res, error, 'Universal registration');
   }
 };
@@ -815,7 +989,7 @@ export const getMe = async (req, res) => {
           user.lawyerProfile = lawyerRes.rows[0];
         }
       } catch (lawyerErr) {
-        console.error("Auth DB Error (getMe lawyer profile):", lawyerErr);
+        console.error('Auth DB Error (getMe lawyer profile):', lawyerErr);
       }
     }
 
@@ -824,7 +998,7 @@ export const getMe = async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     res.status(500).json({ success: false, message: 'Failed to retrieve profile.' });
   }
 };
@@ -905,7 +1079,7 @@ export const updateProfile = async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     res.status(500).json({ success: false, message: error.message || 'Profile update failed.' });
   }
 };
@@ -955,7 +1129,7 @@ export const changePassword = async (req, res) => {
       message: 'Password changed successfully.',
     });
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     res.status(500).json({ success: false, message: 'Error changing password.' });
   }
 };
@@ -984,7 +1158,7 @@ export const forgotPassword = async (req, res) => {
       message: `Account found for ${userRes.rows[0].name}. Please sign in using your configured credentials.`,
     });
   } catch (error) {
-    console.error("Auth DB Error:", error);
+    console.error('Auth DB Error:', error);
     res.status(500).json({ success: false, message: 'Error processing password reset request.' });
   }
 };

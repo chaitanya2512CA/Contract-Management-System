@@ -263,28 +263,25 @@ export const initSchema = async () => {
   }
 
   try {
-    // Fast path for serverless runtimes: if core tables already exist, skip redundant heavy DDL
+    let coreTablesExist = false;
     try {
       const probe = await currentPool.query(
         "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1"
       );
       if (probe && probe.rows && probe.rows.length > 0) {
-        isSchemaInitialized = true;
-        isReady = true;
-        return true;
+        coreTablesExist = true;
       }
-    } catch (_) {
-      // Proceed to initialize if probe fails
-    }
+    } catch (_) {}
 
-    // Execute bundled schema SQL directly (guaranteed to be available in serverless environments)
-    if (SCHEMA_SQL) {
-      await currentPool.query(SCHEMA_SQL);
-    } else {
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      if (fs.existsSync(schemaPath)) {
-        const sql = fs.readFileSync(schemaPath, 'utf8');
-        await currentPool.query(sql);
+    if (!coreTablesExist) {
+      if (SCHEMA_SQL) {
+        await currentPool.query(SCHEMA_SQL);
+      } else {
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+          const sql = fs.readFileSync(schemaPath, 'utf8');
+          await currentPool.query(sql);
+        }
       }
     }
 

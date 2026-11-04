@@ -11,6 +11,14 @@ let initPromise = null;
 async function initializeApp() {
   await connectDB();
 
+  try {
+    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    console.log('[Vercel Serverless] Ensured last_login_at column exists in users and profiles tables.');
+  } catch (migErr) {
+    console.warn('[Vercel Serverless] Migration notice for last_login_at:', migErr.message);
+  }
+
   // Purge any legacy mock advocate test data so the database contains only genuine registered advocates
   try {
     await query(`
