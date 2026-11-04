@@ -7,6 +7,8 @@ import {
   rejectConsultation,
   joinConsultationRoom,
   completeConsultation,
+  startInstantConsultation,
+  endConsultationSession,
 } from '../controllers/consultationController.js';
 import {
   getMessagesByBooking,
@@ -17,6 +19,10 @@ import { protect } from '../middleware/auth.js';
 const router = express.Router();
 
 router.use(protect);
+
+// Astrotalk Instant Consultation APIs
+router.post('/instant-start', startInstantConsultation);
+router.post('/:id/session-end', endConsultationSession);
 
 router.post('/', createConsultation);
 router.get('/', getConsultations);

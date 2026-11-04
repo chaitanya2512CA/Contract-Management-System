@@ -15,12 +15,14 @@ import {
   AlertTriangle,
   Briefcase,
   Building,
+  MessageSquare,
+  Phone,
 } from 'lucide-react';
 import { Navbar } from '../../components/layout/Navbar';
 import { Footer } from '../../components/layout/Footer';
 import { lawyerService } from '../../services/api';
 import { LawyerProfile } from '../../types';
-import { BookingModal } from '../../components/consultation/BookingModal';
+import { AstrotalkPreConsultationModal } from '../../components/consultation/AstrotalkPreConsultationModal';
 
 const SPECIALTIES = [
   { name: 'Criminal Lawyer', icon: '🚨', desc: 'Bail, FIR defense, criminal appeals, economic offences' },
@@ -37,6 +39,7 @@ export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [topLawyers, setTopLawyers] = useState<LawyerProfile[]>([]);
   const [selectedLawyer, setSelectedLawyer] = useState<LawyerProfile | null>(null);
+  const [consultationMode, setConsultationMode] = useState<'chat' | 'call'>('chat');
 
   useEffect(() => {
     const loadFeaturedLawyers = async () => {
@@ -260,62 +263,104 @@ export const LandingPage: React.FC = () => {
               </div>
             ) : (
               <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {topLawyers.map((lawyer) => (
-                  <div
-                    key={lawyer.id}
-                    className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                  >
-                    <div>
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={
-                            lawyer.avatar ||
-                            'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
-                          }
-                          alt={lawyer.full_name}
-                          className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600"
-                        />
-                        <div className="flex-1">
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
-                            {lawyer.full_name}
-                          </h4>
-                          <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 line-clamp-1">
-                            {lawyer.primary_specialty}
-                          </p>
-                          <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
-                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                            <span className="font-bold text-slate-800 dark:text-slate-200">
-                              {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+                {topLawyers.map((lawyer) => {
+                  const fee15 = Number(lawyer.consultation_fee_15 || 499);
+                  const perMinute = Math.max(15, Math.round(fee15 / 15));
+
+                  return (
+                    <div
+                      key={lawyer.id}
+                      className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+                    >
+                      <div>
+                        <div className="flex items-start gap-3">
+                          <div className="relative shrink-0">
+                            <img
+                              src={
+                                lawyer.avatar ||
+                                'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
+                              }
+                              alt={lawyer.full_name}
+                              className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600 shadow-sm"
+                            />
+                            {/* Live status dot */}
+                            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900">
+                              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                             </span>
-                            <span>({lawyer.total_consultations || 20})</span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {lawyer.full_name}
+                              </h4>
+                              {/* Astrotalk Online Status Badge */}
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                </span>
+                                Online
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 truncate">
+                              {lawyer.primary_specialty}
+                            </p>
+                            <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
+                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                              <span className="font-bold text-slate-800 dark:text-slate-200">
+                                {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+                              </span>
+                              <span>({lawyer.total_consultations || 20})</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
+                        <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
 
-                      <p className="mt-2 text-[10px] font-semibold text-slate-400">
-                        {lawyer.experience_years} Years Experience • {lawyer.city}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between">
-                      <div>
-                        <span className="text-[9px] uppercase font-bold text-slate-400">Fee from</span>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          ₹{lawyer.consultation_fee_15 || 499}
+                        <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                          {lawyer.experience_years} Years Experience • {lawyer.city}
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => setSelectedLawyer(lawyer)}
-                        className="rounded-xl bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
-                      >
-                        Book Now
-                      </button>
+                      {/* Bottom: Pricing & Dual Action Buttons */}
+                      <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                            ⚡ ₹{perMinute}/min
+                          </span>
+                          <p className="text-[9px] text-slate-400">₹{fee15} / 15m</p>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedLawyer(lawyer);
+                              setConsultationMode('chat');
+                            }}
+                            className="flex items-center gap-1 rounded-xl bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
+                            title="Instant Chat Consultation"
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            <span>Chat</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedLawyer(lawyer);
+                              setConsultationMode('call');
+                            }}
+                            className="flex items-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                            title="Instant Call Consultation"
+                          >
+                            <Phone className="h-3 w-3" />
+                            <span>Call</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -338,10 +383,12 @@ export const LandingPage: React.FC = () => {
 
       <Footer />
 
-      {/* Booking Modal */}
+      {/* Astrotalk Instant Pre-Consultation Modal */}
       {selectedLawyer && (
-        <BookingModal
+        <AstrotalkPreConsultationModal
+          key={`${selectedLawyer.id}-${consultationMode}`}
           lawyer={selectedLawyer}
+          initialMode={consultationMode}
           isOpen={!!selectedLawyer}
           onClose={() => setSelectedLawyer(null)}
         />

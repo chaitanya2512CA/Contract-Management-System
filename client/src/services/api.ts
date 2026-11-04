@@ -90,6 +90,10 @@ export const verificationService = {
 /* ================= CONSULTATION API ================= */
 export const consultationService = {
   create: (data: any) => api.post('/consultations', data),
+  instantStart: (data: { lawyerId: string; mode: 'chat' | 'call'; durationMinutes?: number; legalIssueDescription?: string }) =>
+    api.post('/consultations/instant-start', data),
+  endSession: (id: string, data?: { durationSeconds?: number; notes?: string }) =>
+    api.post(`/consultations/${id}/session-end`, data),
   getAll: (params?: any) => api.get('/consultations', { params }),
   getById: (id: string) => api.get(`/consultations/${id}`),
   accept: (id: string) => api.put(`/consultations/${id}/accept`),

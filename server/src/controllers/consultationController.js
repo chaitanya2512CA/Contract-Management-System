@@ -504,3 +504,171 @@ export const completeConsultation = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to complete consultation.' });
   }
 };
+
+
+/**
+ * Astrotalk-style Instant Consultation Start
+ * Supports instant chat and call sessions
+ */
+export const startInstantConsultation = async (req, res) => {
+  try {
+    const clientId = req.user.id || req.user._id;
+    const {
+      lawyerId,
+      mode = 'chat', // 'chat' | 'call' | 'audio' | 'video'
+      durationMinutes = 15,
+      legalIssueDescription = 'Astrotalk Instant Legal Consultation',
+    } = req.body;
+
+    if (!lawyerId) {
+      return res.status(400).json({ success: false, message: 'Advocate ID is required.' });
+    }
+
+    // Fetch advocate details
+    const lawyerRes = await query(
+      'SELECT lp.*, u.email, u.phone FROM lawyer_profiles lp JOIN users u ON lp.user_id = u.id WHERE lp.id = $1 OR lp.user_id = $1',
+      [lawyerId]
+    );
+
+    if (lawyerRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Advocate profile not found.' });
+    }
+
+    const lawyer = lawyerRes.rows[0];
+    const fee15 = parseFloat(lawyer.consultation_fee_15) || 499;
+    const fee30 = parseFloat(lawyer.consultation_fee_30) || 899;
+    const fee60 = parseFloat(lawyer.consultation_fee_60) || 1499;
+
+    let fee = fee15;
+    if (Number(durationMinutes) === 30) fee = fee30;
+    else if (Number(durationMinutes) === 60) fee = fee60;
+
+    const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const bookingId = crypto.randomUUID();
+    const sessionLogId = crypto.randomUUID();
+    const meetingRoomId = `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+
+    const startDate = new Date();
+    const endDate = new Date(startDate.getTime() + Number(durationMinutes) * 60000);
+
+    // Ensure consultation_session_logs table exists
+    await query(`
+      CREATE TABLE IF NOT EXISTS consultation_session_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        booking_id VARCHAR(36),
+        advocate_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        mode VARCHAR(20) NOT NULL,
+        duration_seconds INT DEFAULT 0,
+        fee_charged NUMERIC(10, 2) DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'started',
+        started_at TIMESTAMPTZ DEFAULT NOW(),
+        ended_at TIMESTAMPTZ,
+        metadata JSONB DEFAULT '{}'
+      );
+    `);
+
+    const normalizedMode = mode === 'call' ? 'audio' : mode;
+
+    // Create confirmed instant consultation booking
+    await query(
+      `INSERT INTO consultation_bookings (
+        id, booking_ref, client_id, lawyer_id, practice_area, consultation_mode,
+        duration_minutes, scheduled_start, scheduled_end, fee_amount, currency,
+        payment_status, status, legal_issue_description, urgency, meeting_room_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'INR', 'paid', 'confirmed', $11, 'high', $12)`,
+      [
+        bookingId,
+        bookingRef,
+        clientId,
+        lawyer.id,
+        lawyer.primary_specialty,
+        normalizedMode,
+        durationMinutes,
+        startDate.toISOString(),
+        endDate.toISOString(),
+        fee,
+        legalIssueDescription,
+        meetingRoomId,
+      ]
+    );
+
+    // Create linked conversation
+    const convId = crypto.randomUUID();
+    await query(
+      `INSERT INTO conversations (id, booking_id, client_id, lawyer_id) VALUES ($1, $2, $3, $4)`,
+      [convId, bookingId, clientId, lawyer.user_id]
+    );
+
+    // Welcome greeting in chat
+    const greeting = mode === 'chat'
+      ? `Hello! Your instant consultation with ${lawyer.full_name} is active. Type your legal queries below.`
+      : `Instant call connection active with ${lawyer.full_name}.`;
+
+    await query(
+      `INSERT INTO messages (id, conversation_id, booking_id, sender_id, recipient_id, content, message_type)
+       VALUES ($1, $2, $3, $4, $5, $6, 'text')`,
+      [crypto.randomUUID(), convId, bookingId, lawyer.user_id, clientId, greeting]
+    );
+
+    // Log in consultation_session_logs directly in PostgreSQL
+    await query(
+      `INSERT INTO consultation_session_logs (
+        id, booking_id, advocate_id, user_id, mode, fee_charged, status, started_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'started', NOW())`,
+      [sessionLogId, bookingId, lawyer.id, clientId, mode, fee]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Instant ${mode} consultation started successfully.`,
+      booking: {
+        id: bookingId,
+        booking_ref: bookingRef,
+        meeting_room_id: meetingRoomId,
+        fee_amount: fee,
+        mode,
+        status: 'confirmed',
+        scheduled_start: startDate.toISOString(),
+      },
+      sessionLogId,
+    });
+  } catch (error) {
+    console.error('Error in startInstantConsultation:', error);
+    res.status(500).json({ success: false, message: 'Failed to start instant consultation.' });
+  }
+};
+
+/**
+ * End Active Consultation Session & Persist Logs
+ */
+export const endConsultationSession = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { durationSeconds = 0, notes = '' } = req.body;
+
+    // Update session logs
+    await query(
+      `UPDATE consultation_session_logs
+       SET duration_seconds = $1, ended_at = NOW(), status = 'completed'
+       WHERE booking_id = $2 OR id = $2`,
+      [parseInt(durationSeconds, 10) || 0, id]
+    );
+
+    // Update consultation booking
+    await query(
+      `UPDATE consultation_bookings
+       SET status = 'completed', completed_at = NOW(), lawyer_notes = COALESCE($1, lawyer_notes)
+       WHERE id = $2`,
+      [notes, id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Consultation session concluded and recorded successfully.',
+    });
+  } catch (error) {
+    console.error('Error in endConsultationSession:', error);
+    res.status(500).json({ success: false, message: 'Failed to record session completion.' });
+  }
+};
