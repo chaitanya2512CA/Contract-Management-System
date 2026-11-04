@@ -1,5 +1,5 @@
 import app from './src/app.js';
-import { connectDB, closeDB } from './src/config/db.js';
+import { connectDB, closeDB, query } from './src/config/db.js';
 import { seedDatabase } from './src/config/seed.js';
 
 const TEST_PORT = 5055;
@@ -25,6 +25,15 @@ async function runTests() {
   try {
     await connectDB();
     await seedDatabase();
+    try {
+      await query("DELETE FROM attendances");
+      await query("DELETE FROM event_registrations");
+      await query("DELETE FROM announcements");
+      await query("DELETE FROM events");
+      await query("DELETE FROM users WHERE email IN ('elena.rostova@college.edu', 'elena.rostova2@college.edu', 'valid.student@university.edu', 'phone.test1@college.edu', 'phone.test2@college.edu', 'test_valid8@college.edu', 'test_spaces@college.edu', 'phone.in1@college.edu', 'phone.in2@college.edu')");
+    } catch (e) {
+      console.warn('Cleanup notice:', e.message);
+    }
 
     await new Promise((resolve) => {
       server = app.listen(TEST_PORT, () => {
@@ -179,7 +188,6 @@ async function runTests() {
     );
 
     // 13. Verify Database Persistence: Direct query to verify stored record & hashed password
-    const { query } = await import('./src/config/db.js');
     const dbCheck = await query('SELECT id, name, email, password_hash, role, student_id FROM users WHERE LOWER(email) = $1', [newStudentEmail]);
     assert(
       dbCheck.rows.length === 1 &&
