@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { authService } from '../services/api';
+import { supabase } from '../services/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -8,11 +9,17 @@ interface AuthContextType {
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  login: (creds: { email: string; password: string }) => Promise<User>;
+  register: (data: any) => Promise<User>;
   loginStudent: (creds: { email: string; password: string }) => Promise<User>;
   loginOrganizer: (creds: { email: string; password: string }) => Promise<User>;
   loginAdmin: (creds: { email: string; password: string }) => Promise<User>;
   registerStudent: (data: any) => Promise<User>;
   registerOrganizer: (data: any) => Promise<User>;
+  signInWithSupabase: (email: string, password: string) => Promise<User>;
+  signUpWithSupabase: (data: { email: string; password: string; name: string; role?: UserRole; [key: string]: any }) => Promise<any>;
+  signOutWithSupabase: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
 }
@@ -31,41 +38,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Sync session on mount
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const savedToken = localStorage.getItem('campuspulse_token');
-      if (savedToken) {
-        try {
-          const res = await authService.getMe();
-          if (res.data.success && res.data.user) {
-            setUser(res.data.user);
-            localStorage.setItem('campuspulse_user', JSON.stringify(res.data.user));
-          }
-        } catch (err: any) {
-          if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-            console.warn('Session verification failed with 401/403, clearing credentials.');
-            localStorage.removeItem('campuspulse_token');
-            localStorage.removeItem('campuspulse_user');
-            setUser(null);
-            setToken(null);
-          } else {
-            console.warn('Network or server error during session verification, keeping cached session active.', err);
-          }
-        }
-      }
-      setIsLoading(false);
-    };
-
-    initializeAuth();
-  }, []);
-
   const handleAuthSuccess = (resData: { token: string; user: User }) => {
     localStorage.setItem('campuspulse_token', resData.token);
     localStorage.setItem('campuspulse_user', JSON.stringify(resData.user));
     setToken(resData.token);
     setUser(resData.user);
     return resData.user;
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      const savedToken = localStorage.getItem('campuspulse_token');
+      if (savedToken) {
+        try {
+          const res = await authService.getMe();
+          if (mounted && res.data.success && res.data.user) {
+            setUser(res.data.user);
+            localStorage.setItem('campuspulse_user', JSON.stringify(res.data.user));
+          }
+        } catch (err: any) {
+          if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+            console.warn('Session verification failed, clearing expired credentials.');
+            localStorage.removeItem('campuspulse_token');
+            localStorage.removeItem('campuspulse_user');
+            if (mounted) {
+              setUser(null);
+              setToken(null);
+            }
+          } else {
+            console.warn('Network or server error during session verification, keeping cached session active.');
+          }
+        }
+      }
+
+      // Check active Supabase session if available
+      try {
+        const { data: sbSession } = await supabase.auth.getSession();
+        if (mounted && sbSession?.session?.access_token && !savedToken) {
+          const tokenStr = sbSession.session.access_token;
+          const syncRes = await authService.supabaseSync({
+            supabaseToken: tokenStr,
+            metadata: sbSession.session.user.user_metadata,
+          });
+          if (syncRes.data.success && syncRes.data.user) {
+            handleAuthSuccess(syncRes.data);
+          }
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Listen to Supabase Auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.access_token) {
+        try {
+          const syncRes = await authService.supabaseSync({
+            supabaseToken: session.access_token,
+            metadata: session.user.user_metadata,
+          });
+          if (mounted && syncRes.data.success && syncRes.data.user) {
+            handleAuthSuccess(syncRes.data);
+          }
+        } catch (_) {}
+      } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('campuspulse_token');
+        localStorage.removeItem('campuspulse_user');
+        if (mounted) {
+          setUser(null);
+          setToken(null);
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (creds: { email: string; password: string }) => {
+    const res = await authService.login(creds);
+    return handleAuthSuccess(res.data);
+  };
+
+  const register = async (data: any) => {
+    const res = await authService.register(data);
+    return handleAuthSuccess(res.data);
   };
 
   const loginStudent = async (creds: { email: string; password: string }) => {
@@ -93,6 +158,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return handleAuthSuccess(res.data);
   };
 
+  const signInWithSupabase = async (email: string, password: string): Promise<User> => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (!data.session?.access_token) {
+      throw new Error('Supabase authentication succeeded but no session token was issued.');
+    }
+
+    const syncRes = await authService.supabaseSync({
+      supabaseToken: data.session.access_token,
+      metadata: data.user?.user_metadata,
+    });
+
+    return handleAuthSuccess(syncRes.data);
+  };
+
+  const signUpWithSupabase = async (formData: {
+    email: string;
+    password: string;
+    name: string;
+    role?: UserRole;
+    [key: string]: any;
+  }) => {
+    const { email, password, name, role = 'client', ...extra } = formData;
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+          name,
+          role,
+          ...extra,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.session?.access_token) {
+      const syncRes = await authService.supabaseSync({
+        supabaseToken: data.session.access_token,
+        role,
+        metadata: data.user?.user_metadata,
+      });
+      return handleAuthSuccess(syncRes.data);
+    }
+
+    const backendRes = await authService.register({
+      name,
+      email,
+      password,
+      role,
+      ...extra,
+    });
+    return handleAuthSuccess(backendRes.data);
+  };
+
+  const signOutWithSupabase = async () => {
+    await supabase.auth.signOut();
+    logout();
+  };
+
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      throw new Error(error.message);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('campuspulse_token');
     localStorage.removeItem('campuspulse_user');
@@ -115,11 +255,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: user?.role || null,
         isAuthenticated: !!user && !!token,
         isLoading,
+        login,
+        register,
         loginStudent,
         loginOrganizer,
         loginAdmin,
         registerStudent,
         registerOrganizer,
+        signInWithSupabase,
+        signUpWithSupabase,
+        signOutWithSupabase,
+        resetPassword,
         logout,
         updateUser,
       }}

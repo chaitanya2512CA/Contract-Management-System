@@ -1,3 +1,4 @@
+import { verifySupabaseToken } from '../config/supabase.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -30,6 +31,48 @@ const sendAuthResponse = (user, statusCode, res, message = 'Authenticated succes
     message,
     token,
     user,
+  });
+};
+
+// Centralized authentication and registration error handler
+export const handleAuthError = (res, error, operation = 'Authentication') => {
+  console.error(`[Auth Diagnostic] ${operation} error:`, {
+    code: error.code,
+    routine: error.routine,
+    message: error.message,
+    name: error.name,
+    stack: error.stack,
+  });
+
+  if (error.code === '23505') {
+    return res.status(409).json({
+      success: false,
+      message: 'An account with this email address already exists. Please sign in.',
+    });
+  }
+
+  const isTlsOrConnError =
+    error.code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+    error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+    error.code === 'CERT_HAS_EXPIRED' ||
+    error.code === 'ECONNREFUSED' ||
+    error.code === 'ETIMEDOUT' ||
+    error.code === 'EAI_AGAIN' ||
+    error.code === 'ENOTFOUND' ||
+    error.message?.includes('certificate') ||
+    error.message?.includes('connection') ||
+    error.message?.includes('DATABASE_URL');
+
+  if (isTlsOrConnError) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database service is temporarily unavailable or requires verified SSL certificate configuration. Please check database connectivity.',
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message: `${operation} failed. Please try again.`,
   });
 };
 
@@ -109,10 +152,7 @@ export const registerStudent = async (req, res) => {
         message: 'An account with this email address already exists. Please sign in.',
       });
     }
-    console.error('Error in registerStudent:', error);
-    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
-    const statusCode = isConnError ? 503 : 500;
-    res.status(statusCode).json({ success: false, message: error.message || 'Server error during registration.' });
+    return handleAuthError(res, error, 'Student registration');
   }
 };
 
@@ -192,8 +232,7 @@ export const registerOrganizer = async (req, res) => {
     if (error.code === '23505') {
       return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
     }
-    console.error('Error in registerOrganizer:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during registration.' });
+    return handleAuthError(res, error, 'Organizer registration');
   }
 };
 
@@ -257,10 +296,7 @@ export const loginStudent = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Welcome back to CampusPulse!');
   } catch (error) {
-    console.error('Error in loginStudent:', error);
-    const isConnError = error.message?.includes('DATABASE_URL') || error.message?.includes('connection') || error.message?.includes('ECONNREFUSED');
-    const statusCode = isConnError ? 503 : 500;
-    res.status(statusCode).json({ success: false, message: error.message || 'Server error during login.' });
+    return handleAuthError(res, error, 'Student login');
   }
 };
 
@@ -323,8 +359,7 @@ export const loginOrganizer = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Organizer portal authentication successful.');
   } catch (error) {
-    console.error('Error in loginOrganizer:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during login.' });
+    return handleAuthError(res, error, 'Organizer login');
   }
 };
 
@@ -386,13 +421,21 @@ export const loginAdmin = async (req, res) => {
 
     await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
 
-    // Record audit log
+    // Record audit log and admin log
     try {
+      const logId = crypto.randomUUID();
       await query(
         `INSERT INTO audit_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
          VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
-        [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+        [logId, row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
       );
+      try {
+        await query(
+          `INSERT INTO admin_logs (id, user_id, admin_email, action, target_type, target_id, details, ip_address)
+           VALUES ($1, $2, $3, 'ADMIN_LOGIN', 'USER', $4, 'Administrator portal sign in', $5)`,
+          [crypto.randomUUID(), row.id, cleanEmail, row.id, req.ip || '127.0.0.1']
+        );
+      } catch (_) {}
     } catch (e) {
       // Non-blocking audit record
     }
@@ -400,8 +443,7 @@ export const loginAdmin = async (req, res) => {
     const user = mapUser(row);
     sendAuthResponse(user, 200, res, 'Administrator portal authentication successful.');
   } catch (error) {
-    console.error('Error in loginAdmin:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error during admin login.' });
+    return handleAuthError(res, error, 'Administrator login');
   }
 };
 
@@ -416,6 +458,13 @@ export const getMe = async (req, res) => {
     }
 
     const user = mapUser(userRes.rows[0]);
+    if (user.role === 'lawyer') {
+      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+      if (lawyerRes.rows.length > 0) {
+        user.lawyerProfile = lawyerRes.rows[0];
+      }
+    }
+
     res.status(200).json({
       success: true,
       user,
@@ -579,5 +628,213 @@ export const forgotPassword = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error processing password reset request.' });
+  }
+};
+
+/**
+ * Universal Login for ContractIQ
+ * Handles client, lawyer, business, and admin authentication
+ */
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    const row = userRes.rows[0];
+    const isMatch = await bcrypt.compare(password, row.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please verify your email and password.' });
+    }
+
+    if (row.is_active === false) {
+      return res.status(403).json({ success: false, message: 'Your account is deactivated. Please contact support.' });
+    }
+
+    await query('UPDATE users SET last_login = NOW() WHERE id = $1', [row.id]);
+
+    const user = mapUser(row);
+
+    // If lawyer, include lawyer profile details
+    if (user.role === 'lawyer') {
+      const lawyerRes = await query('SELECT * FROM lawyer_profiles WHERE user_id = $1', [user.id]);
+      if (lawyerRes.rows.length > 0) {
+        user.lawyerProfile = lawyerRes.rows[0];
+      }
+    }
+
+    sendAuthResponse(user, 200, res, 'Logged in successfully.');
+  } catch (error) {
+    return handleAuthError(res, error, 'Universal login');
+  }
+};
+
+/**
+ * Universal Registration for ContractIQ
+ * Supports client, lawyer, and business registration
+ */
+export const register = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role = 'client',
+      phone = '',
+      companyName = '',
+      city = 'New Delhi',
+      state = 'Delhi',
+      // Lawyer-specific fields
+      primarySpecialty = 'Contract Lawyer',
+      additionalSpecialties = [],
+      experienceYears = 3,
+      barCouncilNumber = '',
+      barState = '',
+      consultationFee15 = 499,
+      consultationFee30 = 899,
+      consultationFee60 = 1499,
+      bio = ''
+    } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const userId = crypto.randomUUID();
+
+    const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
+    const assignedRole = allowedRoles.includes(role) ? role : 'client';
+
+    await query(
+      `INSERT INTO users (id, name, email, password_hash, role, phone, company_name, city, state, bio, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+      [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
+    );
+
+    try {
+      await query(
+        `INSERT INTO profiles (id, email, full_name, role, phone, company_name, city, state, bio, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`,
+        [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
+      );
+    } catch (_) {}
+
+    let lawyerProfile = null;
+    if (assignedRole === 'lawyer') {
+      const profileId = crypto.randomUUID();
+      const lawyerRes = await query(
+        `INSERT INTO lawyer_profiles (
+          id, user_id, full_name, headline, primary_specialty, additional_specialties,
+          experience_years, bar_council_number, bar_state, languages,
+          consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
+          is_instant_booking, is_verified, verification_status, bio, city, state
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, false, 'pending', $15, $16, $17)
+        RETURNING *`,
+        [
+          profileId,
+          userId,
+          name.trim(),
+          `${primarySpecialty} | Advocate`,
+          primarySpecialty,
+          JSON.stringify(additionalSpecialties),
+          Number(experienceYears) || 3,
+          barCouncilNumber,
+          barState,
+          JSON.stringify(['English', 'Hindi']),
+          Number(consultationFee15) || 499,
+          Number(consultationFee30) || 899,
+          Number(consultationFee60) || 1499,
+          JSON.stringify(['chat', 'audio', 'video']),
+          bio,
+          city,
+          state
+        ]
+      );
+      lawyerProfile = lawyerRes.rows[0];
+
+      // Add default availability (Mon-Fri 09:00 - 18:00)
+      for (let day = 1; day <= 5; day++) {
+        await query(
+          `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
+           VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
+          [crypto.randomUUID(), profileId, day]
+        );
+      }
+    }
+
+    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = mapUser(userRes.rows[0]);
+    if (lawyerProfile) {
+      user.lawyerProfile = lawyerProfile;
+    }
+
+    sendAuthResponse(user, 201, res, 'Account registered successfully.');
+  } catch (error) {
+    return handleAuthError(res, error, 'Universal registration');
+  }
+};
+
+/**
+ * Supabase Auth Session Synchronization
+ * Syncs Supabase user credentials & profile into PostgreSQL backend
+ */
+export const supabaseSync = async (req, res) => {
+  try {
+    const { supabaseToken, role, metadata } = req.body;
+    let authUser = null;
+    if (supabaseToken) {
+      authUser = await verifySupabaseToken(supabaseToken);
+    }
+    if (!authUser && req.user) {
+      authUser = { id: req.user.id, email: req.user.email, user_metadata: metadata || {} };
+    }
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: 'Invalid or missing Supabase session.' });
+    }
+
+    const email = authUser.email.toLowerCase();
+    const name = authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0];
+    const userRole = role || authUser.user_metadata?.role || 'client';
+
+    let userRes = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
+    if (userRes.rows.length === 0) {
+      const newId = authUser.id || crypto.randomUUID();
+      await query(
+        `INSERT INTO users (id, name, email, role, phone, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)`,
+        [newId, name, email, userRole, authUser.user_metadata?.phone || '']
+      );
+      try {
+        await query(
+          `INSERT INTO profiles (id, auth_user_id, email, full_name, role, phone)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name`,
+          [newId, authUser.id, email, name, userRole, authUser.user_metadata?.phone || '']
+        );
+      } catch (_) {}
+      userRes = await query('SELECT * FROM users WHERE id = $1', [newId]);
+    }
+
+    const user = mapUser(userRes.rows[0]);
+    sendAuthResponse(user, 200, res, 'Supabase session synchronized successfully.');
+  } catch (error) {
+    return handleAuthError(res, error, 'Supabase session synchronization');
   }
 };

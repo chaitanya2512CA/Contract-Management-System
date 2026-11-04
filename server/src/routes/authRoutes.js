@@ -5,6 +5,9 @@ import {
   loginStudent,
   loginOrganizer,
   loginAdmin,
+  login,
+  register,
+  supabaseSync,
   getMe,
   updateProfile,
   changePassword,
@@ -15,14 +18,16 @@ import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Public Authentication Endpoints with rate limiting
+// Universal ContractIQ Authentication
+router.post('/login', authLimiter, login);
+router.post('/register', authLimiter, register);
+router.post('/supabase-sync', authLimiter, supabaseSync);
+
+// Legacy Collegiate Portals
 router.post('/student/register', authLimiter, registerStudent);
 router.post('/student/login', authLimiter, loginStudent);
-
 router.post('/organizer/register', authLimiter, registerOrganizer);
 router.post('/organizer/login', authLimiter, loginOrganizer);
-
-// Dedicated Admin Portal Endpoint (Strict Admin Only)
 router.post('/admin/login', authLimiter, loginAdmin);
 
 router.post('/forgot-password', authLimiter, forgotPassword);

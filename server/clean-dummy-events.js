@@ -48,25 +48,25 @@ async function cleanDummyEvents() {
       console.log('\n[3/4] Cleaning associated sample announcement and audit records...');
       await query(`DELETE FROM announcements WHERE title = 'Hacker Guide & API Keys Released'`);
       await query(`DELETE FROM audit_logs WHERE details = 'Approved event: AI Horizon 2026'`);
-      console.log('Associated sample announcements and audit records cleaned.');
+      console.log('Sample announcements and audit trail purged.');
     }
 
-    console.log('\n[4/4] Verifying remaining database records...');
-    const totalEventsRes = await query(`SELECT COUNT(*) as count FROM events`);
-    const totalUsersRes = await query(`SELECT COUNT(*) as count FROM users`);
-    const totalRegistrationsRes = await query(`SELECT COUNT(*) as count FROM event_registrations`);
+    // Verify remaining events in database
+    console.log('\n[4/4] Verifying remaining genuine database events...');
+    const remainingRes = await query('SELECT id, title, status, organizer_email FROM events ORDER BY created_at DESC');
+    console.log(`Remaining persistent events in database: ${remainingRes.rows.length}`);
+    for (const ev of remainingRes.rows) {
+      console.log(` - [${ev.status}] "${ev.title}" (by ${ev.organizer_email})`);
+    }
 
-    console.log(`- Remaining total events: ${totalEventsRes.rows[0].count}`);
-    console.log(`- Remaining total users (students/admins/organizers): ${totalUsersRes.rows[0].count}`);
-    console.log(`- Remaining total registrations: ${totalRegistrationsRes.rows[0].count}`);
-
-    console.log('\n✅ Database clean-up completed safely without touching genuine data.');
+    console.log('\n====================================================');
+    console.log(' Sample event purge complete. Real user data preserved.');
+    console.log('====================================================');
   } catch (err) {
-    console.error('❌ Error during sample event purge:', err.message);
+    console.error('Error cleaning sample events:', err);
     process.exit(1);
   } finally {
     await closeDB();
-    process.exit(0);
   }
 }
 

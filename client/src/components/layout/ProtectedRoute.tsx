@@ -1,11 +1,11 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   allowedRoles?: UserRole[];
 }
 
@@ -35,7 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (allowedRoles && allowedRoles.includes('organizer') && !allowedRoles.includes('student')) {
       return <Navigate to="/organizer/login" state={{ from: location }} replace />;
     }
-    return <Navigate to="/student/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Authenticated, but role not allowed
@@ -43,8 +43,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     // Redirect to respective authorized dashboard
     if (role === 'admin') return <Navigate to="/admin/dashboard" replace />;
     if (role === 'organizer') return <Navigate to="/organizer/dashboard" replace />;
-    return <Navigate to="/student/dashboard" replace />;
+    if (role === 'lawyer') return <Navigate to="/lawyer/dashboard" replace />;
+    if (role === 'business') return <Navigate to="/business/dashboard" replace />;
+    if (role === 'client') return <Navigate to="/client/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return <>{children || <Outlet />}</>;
 };
