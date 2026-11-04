@@ -60,130 +60,123 @@ export const AdminLoginPage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-slate-900 py-12 sm:px-6 lg:px-8 text-white relative overflow-hidden">
+    <div className="flex min-h-screen flex-col justify-center bg-[#080808] py-12 sm:px-6 lg:px-8 text-[#F5E6C4] relative overflow-hidden">
       {/* Background ambient lighting */}
-      <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
-      <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-purple-600/20 blur-3xl" />
+      <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-[#D4AF37]/5 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-[#D4AF37]/5 blur-3xl pointer-events-none" />
 
       {/* Top Bar with theme and back link */}
       <div className="absolute top-6 right-6 flex items-center gap-3">
-        <ThemeToggle className="border-slate-800 bg-slate-800/80 text-slate-300" />
+        <ThemeToggle className="border-[#262118] bg-[#121212] text-[#D4AF37]" />
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4">
         {/* Institutional Crest */}
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-xl shadow-indigo-500/25 border border-indigo-400/30">
-            <Scale className="h-8 w-8 text-white" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#121212] border border-[#262118] text-[#D4AF37] shadow-xl">
+            <Scale className="h-8 w-8 text-[#D4AF37]" />
           </div>
 
-          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold tracking-wider uppercase text-indigo-300">
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[#262118] bg-[#121212] px-3.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#D4AF37]">
             <Lock className="h-3 w-3" />
-            JurisFlow Administrator Portal
+            JurisFlow Administrator Command
           </span>
 
-          <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl font-serif">
+          <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
             JurisFlow Command Center
           </h2>
-          <p className="mt-2 text-xs text-slate-400 max-w-sm font-medium">
+          <p className="mt-2 text-xs text-[#A39E93] max-w-sm font-medium">
             Your Legal World, Organized in One Flow.
           </p>
         </div>
 
         {/* Security Warning Box */}
-        <div className="mt-6 rounded-xl border border-indigo-900/60 bg-indigo-950/40 p-3.5 text-xs text-indigo-300">
+        <div className="mt-6 rounded-2xl border border-[#262118] bg-[#121212] p-4 text-xs text-[#A39E93]">
           <div className="flex items-start gap-2.5">
-            <Server className="h-4 w-4 shrink-0 text-indigo-400 mt-0.5" />
+            <Server className="h-4 w-4 shrink-0 text-[#D4AF37] mt-0.5" />
             <p className="leading-relaxed text-[11px]">
-              <strong>Security Protocol:</strong> All administrative logins, approvals, and user updates are strictly logged with timestamp and IP origin to the audit database. Student and organizer logins will be rejected.
+              <strong className="text-[#F5E6C4]">Security Protocol:</strong> All administrative logins, approvals, and user updates are strictly logged with timestamp and IP origin to the audit database.
             </p>
           </div>
         </div>
 
         {/* Error Notification */}
         {errorMessage && (
-          <div className="mt-4 rounded-xl border border-rose-800/60 bg-rose-950/60 p-3.5 text-xs text-rose-300 flex items-start gap-2.5">
+          <div className="mt-4 rounded-xl border border-rose-900/60 bg-rose-950/60 p-3.5 text-xs text-rose-300 flex items-start gap-2.5">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
             <p className="flex-1">{errorMessage}</p>
           </div>
         )}
 
         {/* Login Form Card */}
-        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="mt-6 rounded-3xl border border-[#262118] bg-[#121212] p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300">
+              <label className="block text-xs font-bold text-[#A39E93]">
                 Administrator Email / Official ID
               </label>
               <div className="mt-1.5 relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A39E93]" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@jurisflow.com"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-10 pr-3.5 text-xs text-white placeholder:text-slate-500 focus:border-indigo-500 focus:bg-slate-800 focus:outline-none"
+                  className="w-full rounded-2xl border border-[#262118] bg-[#1A1A1A] py-3 pl-10 pr-3.5 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none transition"
                 />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-300">
+                <label className="block text-xs font-bold text-[#A39E93]">
                   Master Password
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-indigo-400 hover:underline font-medium"
+                  className="text-xs text-[#D4AF37] hover:underline font-medium"
                 >
                   Forgot Password?
                 </Link>
               </div>
               <div className="mt-1.5 relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A39E93]" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-10 pr-10 text-xs text-white placeholder:text-slate-500 focus:border-indigo-500 focus:bg-slate-800 focus:outline-none"
+                  className="w-full rounded-2xl border border-[#262118] bg-[#1A1A1A] py-3 pl-10 pr-10 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A39E93] hover:text-[#D4AF37]"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            <Button
+            <button
               type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={isLoading}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 text-sm shadow-lg shadow-indigo-600/30"
-              rightIcon={<ArrowRight className="h-4 w-4" />}
+              disabled={isLoading}
+              className="w-full rounded-2xl bg-[#D4AF37] py-3.5 text-xs font-black text-[#080808] shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#AA7C11] disabled:opacity-50"
             >
-              Verify Administrative Access
-            </Button>
+              {isLoading ? 'Verifying Credentials...' : 'Verify Administrative Access'}
+            </button>
           </form>
         </div>
 
         {/* Portal Switching links */}
-        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-slate-400">
-          <Link to="/student/login" className="hover:text-white transition-colors">
-            Student Login →
+        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-[#A39E93]">
+          <Link to="/login" className="hover:text-[#D4AF37] transition">
+            Client Portal →
           </Link>
-          <span className="text-slate-600">•</span>
-          <Link to="/organizer/login" className="hover:text-white transition-colors">
-            Organizer Login →
-          </Link>
-          <span className="text-slate-600">•</span>
-          <Link to="/" className="hover:text-white transition-colors">
+          <span className="text-[#262118]">•</span>
+          <Link to="/" className="hover:text-[#D4AF37] transition">
             Return to Hub
           </Link>
         </div>

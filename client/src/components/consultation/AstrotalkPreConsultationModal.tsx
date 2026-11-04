@@ -52,6 +52,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
   const fee60 = Number(lawyer?.consultation_fee_60 || 1499);
 
   const perMinute = Math.max(15, Math.round(fee15 / 15));
+  const ratingAvg = (Number(lawyer?.rating_avg) || 4.9).toFixed(1);
 
   const getSessionFee = () => {
     if (duration === 15) return fee15;
@@ -100,63 +101,63 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 my-8 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-3xl border border-[#262118] bg-[#121212] p-6 shadow-2xl text-[#F5E6C4] my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
-              <Zap className="h-4 w-4 fill-amber-500" />
+        <div className="flex items-center justify-between border-b border-[#262118] pb-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#262118] bg-[#1A1A1A] text-[#D4AF37]">
+              <Zap className="h-4 w-4 fill-[#D4AF37]" />
             </span>
             <div>
-              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white sm:text-base">
-                Astrotalk Instant Legal Consultation
+              <h2 className="text-sm font-black text-white sm:text-base">
+                Instant Advocate Consultation
               </h2>
-              <p className="text-[11px] text-slate-500">Live 1-on-1 Attorney Privileged Session</p>
+              <p className="text-[11px] text-[#A39E93]">Live 1-on-1 Attorney Privileged Session</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="rounded-full p-1.5 text-[#A39E93] transition hover:bg-[#1A1A1A] hover:text-[#D4AF37]"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Advocate Card Summary */}
-        <div className="mt-4 flex items-start gap-3.5 rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800/80 dark:bg-slate-800/40">
-          <div className="relative">
+        <div className="mt-4 flex items-start gap-3.5 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-4">
+          <div className="relative shrink-0">
             <img
               src={
                 lawyer.avatar ||
                 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
               }
               alt={lawyer.full_name}
-              className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600 shadow-sm"
+              className="h-14 w-14 rounded-2xl object-cover ring-2 ring-[#D4AF37]/70 shadow-sm"
             />
             {/* Live pulsing dot */}
-            <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900">
-              <span className="h-2 w-2 animate-ping rounded-full bg-emerald-200" />
+            <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#10B981] ring-2 ring-[#1A1A1A]">
+              <span className="h-2 w-2 animate-ping rounded-full bg-[#10B981]" />
             </span>
           </div>
 
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">{lawyer.full_name}</h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className="text-sm font-bold text-white truncate">{lawyer.full_name}</h3>
               {lawyer.is_verified && (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-0.5 rounded-full border border-[#D4AF37]/30 bg-[#121212] px-2 py-0.5 text-[9px] font-bold text-[#D4AF37] shrink-0">
                   <ShieldCheck className="h-3 w-3" />
                   Verified
                 </span>
               )}
             </div>
 
-            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">{lawyer.primary_specialty}</p>
+            <p className="text-xs font-semibold text-[#D4AF37] truncate mt-0.5">{lawyer.primary_specialty}</p>
 
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="flex items-center gap-0.5 font-bold text-amber-500">
-                <Star className="h-3 w-3 fill-amber-400" />
-                {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[#A39E93]">
+              <span className="flex items-center gap-0.5 font-bold text-[#F5E6C4]">
+                <Star className="h-3 w-3 fill-[#D4AF37] text-[#D4AF37]" />
+                ★ {ratingAvg}
               </span>
               <span>•</span>
               <span>{lawyer.experience_years || 5} Years Exp.</span>
@@ -168,7 +169,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
 
         {/* Consultation Mode Selector */}
         <div className="mt-4">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[#A39E93]">
             Select Consultation Channel
           </label>
           <div className="mt-1.5 grid grid-cols-2 gap-2.5">
@@ -177,11 +178,11 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               onClick={() => setMode('chat')}
               className={`flex items-center justify-center gap-2 rounded-2xl border p-3 text-xs font-bold transition ${
                 mode === 'chat'
-                  ? 'border-blue-600 bg-blue-50 text-blue-800 shadow-sm dark:bg-blue-950/60 dark:text-blue-300'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'border-[#D4AF37] bg-[#1A1A1A] text-[#D4AF37] shadow-sm'
+                  : 'border-[#262118] bg-[#121212] text-[#A39E93] hover:border-[#D4AF37]/40 hover:text-[#F5E6C4]'
               }`}
             >
-              <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <MessageSquare className="h-4 w-4 text-[#D4AF37]" />
               <span>Instant Chat (₹{perMinute}/min)</span>
             </button>
 
@@ -190,11 +191,11 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               onClick={() => setMode('call')}
               className={`flex items-center justify-center gap-2 rounded-2xl border p-3 text-xs font-bold transition ${
                 mode === 'call'
-                  ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm dark:bg-emerald-950/60 dark:text-emerald-300'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'border-[#D4AF37] bg-[#D4AF37] text-[#080808] font-black shadow-sm'
+                  : 'border-[#262118] bg-[#121212] text-[#A39E93] hover:border-[#D4AF37]/40 hover:text-[#F5E6C4]'
               }`}
             >
-              <Phone className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <Phone className="h-4 w-4" />
               <span>Instant Call (₹{perMinute}/min)</span>
             </button>
           </div>
@@ -203,10 +204,10 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
         {/* Duration Packages */}
         <div className="mt-4">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-[#A39E93]">
               Session Duration
             </label>
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="text-[11px] font-bold text-[#D4AF37]">
               ⚡ Live rate: ₹{perMinute}/min
             </span>
           </div>
@@ -217,12 +218,12 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               onClick={() => setDuration(15)}
               className={`rounded-2xl border p-2.5 font-bold transition ${
                 duration === 15
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-md'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'border-[#D4AF37] bg-[#D4AF37] text-[#080808] font-black shadow-md'
+                  : 'border-[#262118] bg-[#1A1A1A] text-[#F5E6C4] hover:border-[#D4AF37]'
               }`}
             >
               <p>15 mins</p>
-              <p className="mt-0.5 text-[10px] font-normal opacity-90">₹{fee15}</p>
+              <p className="mt-0.5 text-[10px] opacity-90">₹{fee15}</p>
             </button>
 
             <button
@@ -230,12 +231,12 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               onClick={() => setDuration(30)}
               className={`rounded-2xl border p-2.5 font-bold transition ${
                 duration === 30
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-md'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'border-[#D4AF37] bg-[#D4AF37] text-[#080808] font-black shadow-md'
+                  : 'border-[#262118] bg-[#1A1A1A] text-[#F5E6C4] hover:border-[#D4AF37]'
               }`}
             >
               <p>30 mins</p>
-              <p className="mt-0.5 text-[10px] font-normal opacity-90">₹{fee30}</p>
+              <p className="mt-0.5 text-[10px] opacity-90">₹{fee30}</p>
             </button>
 
             <button
@@ -243,48 +244,48 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               onClick={() => setDuration(60)}
               className={`rounded-2xl border p-2.5 font-bold transition ${
                 duration === 60
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-md'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'border-[#D4AF37] bg-[#D4AF37] text-[#080808] font-black shadow-md'
+                  : 'border-[#262118] bg-[#1A1A1A] text-[#F5E6C4] hover:border-[#D4AF37]'
               }`}
             >
               <p>60 mins</p>
-              <p className="mt-0.5 text-[10px] font-normal opacity-90">₹{fee60}</p>
+              <p className="mt-0.5 text-[10px] opacity-90">₹{fee60}</p>
             </button>
           </div>
         </div>
 
         {/* Astrotalk Wallet Balance Bar */}
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+        <div className="mt-4 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-3.5 text-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <Wallet className="h-4 w-4 text-[#D4AF37]" />
               <div>
-                <span className="font-semibold text-slate-700 dark:text-slate-200">Wallet Balance: </span>
-                <span className="font-extrabold text-amber-700 dark:text-amber-400">₹{walletBalance.toFixed(2)}</span>
+                <span className="font-semibold text-[#A39E93]">Wallet Balance: </span>
+                <span className="font-black text-[#D4AF37]">₹{(Number(walletBalance) || 0).toFixed(2)}</span>
               </div>
             </div>
 
             <button
               type="button"
               onClick={handleRechargeWallet}
-              className="inline-flex items-center gap-1 rounded-xl bg-amber-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-amber-700"
+              className="inline-flex items-center gap-1 rounded-xl bg-[#D4AF37] px-3 py-1 text-[11px] font-bold text-[#080808] shadow-sm hover:bg-[#AA7C11] transition"
             >
               <PlusCircle className="h-3 w-3" />
               <span>Add ₹1,000</span>
             </button>
           </div>
 
-          <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#A39E93]">
             <span>Talktime Available: ~{maxMinsAvailable} mins</span>
             {showWalletRecharged && (
-              <span className="font-bold text-emerald-600 animate-pulse">✓ ₹1,000 added to wallet!</span>
+              <span className="font-bold text-[#10B981] animate-pulse">✓ ₹1,000 added to wallet!</span>
             )}
           </div>
         </div>
 
         {/* Optional Brief Inquiry */}
         <div className="mt-4">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[#A39E93]">
             Legal Matter / Topic (Optional)
           </label>
           <input
@@ -292,29 +293,29 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
             value={legalDescription}
             onChange={(e) => setLegalDescription(e.target.value)}
             placeholder="e.g. Contract review, Bail notice query, Cyber fraud..."
-            className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="mt-1 w-full rounded-2xl border border-[#262118] bg-[#1A1A1A] px-3.5 py-2.5 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none transition"
           />
         </div>
 
         {/* Pricing Summary Breakdown */}
-        <div className="mt-4 space-y-1 rounded-2xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
-          <div className="flex justify-between text-slate-600 dark:text-slate-400">
+        <div className="mt-4 space-y-1.5 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-3.5 text-xs">
+          <div className="flex justify-between text-[#A39E93]">
             <span>Consultation Fee ({duration} mins)</span>
-            <span className="font-bold text-slate-900 dark:text-white">₹{sessionFee}</span>
+            <span className="font-bold text-white">₹{sessionFee}</span>
           </div>
-          <div className="flex justify-between text-slate-600 dark:text-slate-400">
+          <div className="flex justify-between text-[#A39E93]">
             <span>Platform Service Fee</span>
-            <span className="font-bold text-emerald-600 line-through text-[11px]">₹99</span>
-            <span className="font-bold text-emerald-600">FREE</span>
+            <span className="font-bold text-[#10B981] line-through text-[11px]">₹99</span>
+            <span className="font-bold text-[#10B981]">FREE</span>
           </div>
-          <div className="border-t border-slate-200 pt-1.5 flex justify-between font-extrabold text-slate-900 dark:text-white">
+          <div className="border-t border-[#262118] pt-2 flex justify-between font-extrabold text-white">
             <span>Total Payable</span>
-            <span className="text-sm text-blue-700 dark:text-blue-400">₹{sessionFee}</span>
+            <span className="text-sm font-black text-[#D4AF37]">₹{sessionFee}</span>
           </div>
         </div>
 
         {error && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl bg-rose-50 p-2.5 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-rose-950/40 border border-rose-900/60 p-2.5 text-xs text-rose-300">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -325,7 +326,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
           <button
             type="button"
             onClick={onClose}
-            className="w-1/3 rounded-2xl border border-slate-200 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            className="w-1/3 rounded-2xl border border-[#262118] bg-[#1A1A1A] py-3 text-xs font-bold text-[#A39E93] transition hover:text-[#F5E6C4] hover:border-[#D4AF37]/50"
           >
             Cancel
           </button>
@@ -334,11 +335,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
             type="button"
             disabled={isLoading}
             onClick={handleStartConsultation}
-            className={`w-2/3 flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-extrabold text-white shadow-lg transition disabled:opacity-50 ${
-              mode === 'chat'
-                ? 'bg-blue-700 hover:bg-blue-800 shadow-blue-200 dark:shadow-none'
-                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 dark:shadow-none'
-            }`}
+            className="w-2/3 flex items-center justify-center gap-2 rounded-2xl bg-[#D4AF37] py-3 text-xs font-black text-[#080808] shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#AA7C11] active:scale-95 disabled:opacity-50"
           >
             {isLoading ? (
               <span>Connecting with Advocate...</span>
@@ -358,8 +355,8 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
           </button>
         </div>
 
-        <p className="mt-3 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1">
-          <Lock className="h-3 w-3" />
+        <p className="mt-3 text-center text-[10px] text-[#A39E93] flex items-center justify-center gap-1">
+          <Lock className="h-3 w-3 text-[#D4AF37]" />
           <span>Encrypted with 100% Client-Attorney Privilege</span>
         </p>
       </div>

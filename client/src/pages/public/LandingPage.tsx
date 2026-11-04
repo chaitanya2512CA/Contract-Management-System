@@ -71,37 +71,37 @@ export const LandingPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col bg-[#080808] text-[#F5E6C4]">
       <Navbar />
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative overflow-hidden border-b border-slate-200 bg-white py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900">
-          <div className="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+        <section className="relative overflow-hidden border-b border-[#262118] bg-[#080808] py-20 sm:py-28">
+          <div className="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-[#D4AF37]/5 blur-[120px] pointer-events-none" />
 
           <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
             {/* Tagline Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-xs font-bold text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300">
-              <Scale className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span>JurisFlow • Your Legal World, Organized in One Flow.</span>
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#262118] bg-[#121212] px-4 py-1.5 text-xs font-bold text-[#D4AF37] shadow-sm">
+              <Scale className="h-4 w-4 text-[#D4AF37]" />
+              <span>JurisFlow • Executive Legal Architecture</span>
             </div>
 
-            {/* Main Headline */}
-            <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-900 sm:text-6xl dark:text-white">
+            {/* Slogan & Main Headline */}
+            <h1 className="mt-8 text-4xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
               Your Legal World, <br />
-              <span className="text-blue-700 dark:text-blue-500">Organized in One Flow.</span>
+              <span className="text-[#D4AF37]">Organized in One Flow.</span>
             </h1>
 
             {/* Sub-headline */}
-            <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">
-              AI-Powered Contract Intelligence & Verified Advocate Consultations. Review and negotiate agreements with instant AI risk scoring (0–100), red-flag detection, and e-signatures in a unified workspace.
+            <p className="mx-auto mt-6 max-w-3xl text-sm leading-relaxed text-[#A39E93] sm:text-base">
+              AI-Powered Contract Intelligence & Verified Bar Council Advocate Consultations. Review and negotiate agreements with instant AI risk scoring (0–100), red-flag detection, and e-signatures in a unified workspace.
             </p>
 
             {/* CTA Buttons */}
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
               <Link
                 to="/lawyers"
-                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-700 px-7 py-4 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 dark:shadow-none"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-[#D4AF37] px-8 py-4 text-sm font-extrabold text-[#080808] shadow-lg shadow-[#D4AF37]/20 transition hover:bg-[#AA7C11] active:scale-95"
               >
                 <Users className="h-4 w-4" />
                 <span>Consult an Advocate (From ₹499)</span>
@@ -109,25 +109,25 @@ export const LandingPage: React.FC = () => {
 
               <Link
                 to="/contracts"
-                className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                className="flex items-center justify-center gap-2 rounded-2xl border border-[#262118] bg-[#121212] px-8 py-4 text-sm font-bold text-[#F5E6C4] shadow-sm transition hover:bg-[#1A1A1A] hover:border-[#D4AF37] active:scale-95"
               >
-                <FileText className="h-4 w-4 text-emerald-600" />
+                <FileText className="h-4 w-4 text-[#D4AF37]" />
                 <span>AI Contract Lifecycle Hub</span>
               </Link>
             </div>
 
             {/* Trust Badges */}
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-xs text-[#A39E93]">
               <span className="flex items-center gap-1.5 font-semibold">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <ShieldCheck className="h-4 w-4 text-[#10B981]" />
                 Bar Council Verified Advocates
               </span>
               <span className="flex items-center gap-1.5 font-semibold">
-                <Lock className="h-4 w-4 text-blue-600" />
+                <Lock className="h-4 w-4 text-[#D4AF37]" />
                 Client-Attorney Privilege Encrypted
               </span>
               <span className="flex items-center gap-1.5 font-semibold">
-                <Sparkles className="h-4 w-4 text-purple-600" />
+                <Sparkles className="h-4 w-4 text-[#D4AF37]" />
                 Rule-Based AI Contract Extraction
               </span>
             </div>
@@ -135,18 +135,18 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* Practice Areas / Categories Grid */}
-        <section className="py-16">
+        <section className="py-20 bg-[#080808]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
                   Legal Practice Categories
                 </span>
-                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+                <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
                   Find Specialists for Your Legal Problem
                 </h2>
               </div>
-              <Link to="/lawyers" className="flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline">
+              <Link to="/lawyers" className="flex items-center gap-1 text-xs font-bold text-[#D4AF37] hover:underline">
                 <span>View all 15 specialties</span>
                 <ChevronRight className="h-4 w-4" />
               </Link>
@@ -157,17 +157,17 @@ export const LandingPage: React.FC = () => {
                 <div
                   key={spec.name}
                   onClick={() => navigate(`/lawyers?specialty=${encodeURIComponent(spec.name)}`)}
-                  className="cursor-pointer group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+                  className="cursor-pointer group flex flex-col justify-between rounded-3xl border border-[#262118] bg-[#121212] p-6 shadow-sm transition hover:border-[#D4AF37] hover:bg-[#1A1A1A]"
                 >
                   <div>
                     <span className="text-3xl">{spec.icon}</span>
-                    <h3 className="mt-3 text-sm font-bold text-slate-900 group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-400 transition">
+                    <h3 className="mt-3 text-sm font-bold text-white group-hover:text-[#D4AF37] transition">
                       {spec.name}
                     </h3>
-                    <p className="mt-1 text-xs text-slate-500 line-clamp-2">{spec.desc}</p>
+                    <p className="mt-1 text-xs text-[#A39E93] line-clamp-2 leading-relaxed">{spec.desc}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                  <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#D4AF37]">
                     <span>Find Advocates</span>
                     <ChevronRight className="h-3 w-3" />
                   </div>
@@ -178,12 +178,12 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* How It Works (Astrotalk-style smooth flow) */}
-        <section className="border-y border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-900">
+        <section className="border-y border-[#262118] bg-[#0D0D0D] py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
               Seamless 4-Step Journey
             </span>
-            <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+            <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
               Consulting an Advocate is Frictionless on JurisFlow
             </h2>
 
@@ -212,11 +212,11 @@ export const LandingPage: React.FC = () => {
               ].map((item) => (
                 <div
                   key={item.step}
-                  className="rounded-3xl border border-slate-100 bg-slate-50/70 p-6 dark:border-slate-800 dark:bg-slate-800/40"
+                  className="rounded-3xl border border-[#262118] bg-[#121212] p-6"
                 >
-                  <span className="font-mono text-2xl font-black text-blue-700 dark:text-blue-400">{item.step}</span>
-                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">{item.title}</h4>
-                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+                  <span className="font-mono text-2xl font-black text-[#D4AF37]">{item.step}</span>
+                  <h4 className="mt-2 text-sm font-bold text-white">{item.title}</h4>
+                  <p className="mt-1 text-xs text-[#A39E93] leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -224,37 +224,37 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* Featured Advocates Spotlight */}
-        <section className="py-16">
+        <section className="py-20 bg-[#080808]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
                   Featured Legal Counsel
                 </span>
-                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl dark:text-white">
+                <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
                   Consult Top-Rated Advocates
                 </h2>
               </div>
-              <Link to="/lawyers" className="text-xs font-bold text-blue-700 hover:underline">
+              <Link to="/lawyers" className="text-xs font-bold text-[#D4AF37] hover:underline">
                 Explore Full Directory →
               </Link>
             </div>
 
             {topLawyers.length === 0 ? (
-              <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+              <div className="mt-8 rounded-3xl border border-[#262118] bg-[#121212] p-10 text-center shadow-sm">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1A1A1A] border border-[#262118] text-[#D4AF37]">
                   <Scale className="h-7 w-7" />
                 </div>
-                <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+                <h3 className="mt-4 text-lg font-bold text-white">
                   No advocates registered yet. Be the first to join JurisFlow!
                 </h3>
-                <p className="mx-auto mt-2 max-w-md text-xs text-slate-500 dark:text-slate-400">
+                <p className="mx-auto mt-2 max-w-md text-xs text-[#A39E93]">
                   Connect with verified clients seeking legal counsel across 15 practice specialties.
                 </p>
                 <div className="mt-5">
                   <Link
                     to="/register?role=lawyer"
-                    className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-5 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#D4AF37] px-6 py-3 text-xs font-bold text-[#080808] shadow-md transition hover:bg-[#AA7C11]"
                   >
                     <span>Register as an Advocate</span>
                     <ChevronRight className="h-4 w-4" />
@@ -266,11 +266,12 @@ export const LandingPage: React.FC = () => {
                 {topLawyers.map((lawyer) => {
                   const fee15 = Number(lawyer.consultation_fee_15 || 499);
                   const perMinute = Math.max(15, Math.round(fee15 / 15));
+                  const ratingAvg = (Number(lawyer.rating_avg) || 4.9).toFixed(1);
 
                   return (
                     <div
                       key={lawyer.id}
-                      className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+                      className="group flex flex-col justify-between rounded-3xl border border-[#262118] bg-[#121212] p-5 shadow-sm transition hover:border-[#D4AF37] hover:shadow-xl hover:shadow-[#D4AF37]/5"
                     >
                       <div>
                         <div className="flex items-start gap-3">
@@ -281,76 +282,81 @@ export const LandingPage: React.FC = () => {
                                 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300'
                               }
                               alt={lawyer.full_name}
-                              className="h-14 w-14 rounded-2xl object-cover ring-2 ring-blue-600 shadow-sm"
+                              className="h-14 w-14 rounded-2xl object-cover ring-2 ring-[#D4AF37]/70 shadow-sm"
                             />
                             {/* Live status dot */}
-                            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900">
+                            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#10B981] ring-2 ring-[#121212]">
                               <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                             </span>
                           </div>
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-1">
-                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              <h4 className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition">
                                 {lawyer.full_name}
                               </h4>
                               {/* Astrotalk Online Status Badge */}
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#10B981] ring-1 ring-[#10B981]/30 shrink-0">
                                 <span className="relative flex h-1.5 w-1.5">
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#10B981] opacity-75"></span>
+                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#10B981]"></span>
                                 </span>
                                 Online
                               </span>
                             </div>
 
-                            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 truncate">
+                            <p className="text-[11px] font-semibold text-[#D4AF37] truncate mt-0.5">
                               {lawyer.primary_specialty}
                             </p>
-                            <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                              <span className="font-bold text-slate-800 dark:text-slate-200">
-                                {Number(lawyer.rating_avg || 4.9).toFixed(1)}
+                            <div className="mt-1 flex items-center gap-1 text-[10px] text-[#A39E93]">
+                              <Star className="h-3 w-3 fill-[#D4AF37] text-[#D4AF37]" />
+                              <span className="font-bold text-[#F5E6C4]">
+                                ★ {ratingAvg}
                               </span>
-                              <span>({lawyer.total_consultations || 20})</span>
+                              <span>({lawyer.total_consultations || 24})</span>
                             </div>
                           </div>
                         </div>
 
-                        <p className="mt-3 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{lawyer.headline}</p>
+                        <p className="mt-3 line-clamp-2 text-xs text-[#A39E93] leading-relaxed">
+                          {lawyer.headline || lawyer.bio}
+                        </p>
 
-                        <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                        <p className="mt-2 text-[10px] font-semibold text-[#A39E93]/80">
                           {lawyer.experience_years} Years Experience • {lawyer.city}
                         </p>
                       </div>
 
                       {/* Bottom: Pricing & Dual Action Buttons */}
-                      <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800 flex items-center justify-between gap-2">
+                      <div className="mt-4 border-t border-[#262118] pt-3 flex items-center justify-between gap-2">
                         <div>
-                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                          <span className="inline-flex items-center rounded-md bg-[#1A1A1A] border border-[#262118] px-2 py-0.5 text-[10px] font-black text-[#D4AF37]">
                             ⚡ ₹{perMinute}/min
                           </span>
-                          <p className="text-[9px] text-slate-400">₹{fee15} / 15m</p>
+                          <p className="text-[9px] text-[#A39E93] mt-0.5">₹{fee15} / 15m</p>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          {/* 💬 Chat button */}
                           <button
                             onClick={() => {
                               setSelectedLawyer(lawyer);
                               setConsultationMode('chat');
                             }}
-                            className="flex items-center gap-1 rounded-xl bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
+                            className="flex items-center gap-1 rounded-xl border border-[#D4AF37]/50 bg-[#1A1A1A] px-2.5 py-1.5 text-[11px] font-bold text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-[#080808] active:scale-95"
                             title="Instant Chat Consultation"
                           >
                             <MessageSquare className="h-3 w-3" />
                             <span>Chat</span>
                           </button>
+
+                          {/* 📞 Call button */}
                           <button
                             onClick={() => {
                               setSelectedLawyer(lawyer);
                               setConsultationMode('call');
                             }}
-                            className="flex items-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                            className="flex items-center gap-1 rounded-xl bg-[#D4AF37] px-2.5 py-1.5 text-[11px] font-extrabold text-[#080808] transition hover:bg-[#AA7C11] active:scale-95"
                             title="Instant Call Consultation"
                           >
                             <Phone className="h-3 w-3" />
@@ -367,10 +373,10 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* Regulatory Disclaimer Banner */}
-        <section className="bg-slate-100 py-6 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+        <section className="bg-[#121212] py-8 border-t border-[#262118]">
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <p className="text-[11px] text-slate-500 leading-relaxed max-w-4xl mx-auto">
-              <strong>STATUTORY & ETHICAL DISCLAIMER:</strong> JurisFlow is an independent legal technology and contract
+            <p className="text-[11px] text-[#A39E93] leading-relaxed max-w-4xl mx-auto">
+              <strong className="text-[#F5E6C4]">STATUTORY & ETHICAL DISCLAIMER:</strong> JurisFlow is an independent legal technology and contract
               lifecycle management platform. The advocates listed on this platform are independent legal practitioners
               registered with their respective State Bar Councils. In accordance with the Advocates Act, 1961 and the Bar
               Council of India Rules, this platform does not solicit legal work, advertise, or promote legal services. The

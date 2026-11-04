@@ -173,7 +173,7 @@ export const AdminAnalyticsPage: React.FC = () => {
                     outerRadius={85}
                     innerRadius={50}
                     paddingAngle={3}
-                    label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}
+                    label={({ category, percent }) => `${category} ${((Number(percent) || 0) * 100).toFixed(0)}%`}
                     fontSize={11}
                   >
                     {stats.categoryStats.map((entry, index) => (

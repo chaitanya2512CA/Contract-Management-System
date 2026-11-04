@@ -340,19 +340,19 @@ export const BookingModal: React.FC<BookingModalProps> = ({ lawyer, isOpen, onCl
           <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-800/50">
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span>{duration}-Minute Legal Consultation Fee:</span>
-              <span className="font-semibold text-slate-900 dark:text-white">₹{consultationFee.toFixed(2)}</span>
+              <span className="font-semibold text-slate-900 dark:text-white">₹{(Number(consultationFee) || 0).toFixed(2)}</span>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span>Platform Technology & Convenience Fee:</span>
-              <span className="font-semibold text-slate-900 dark:text-white">₹{platformFee.toFixed(2)}</span>
+              <span className="font-semibold text-slate-900 dark:text-white">₹{(Number(platformFee) || 0).toFixed(2)}</span>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
               <span>GST (18% Statutory):</span>
-              <span className="font-semibold text-slate-900 dark:text-white">₹{gst.toFixed(2)}</span>
+              <span className="font-semibold text-slate-900 dark:text-white">₹{(Number(gst) || 0).toFixed(2)}</span>
             </div>
             <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:text-white">
               <span>Total Payable:</span>
-              <span className="text-base text-blue-700 dark:text-blue-400">₹{totalAmount.toFixed(2)}</span>
+              <span className="text-base text-blue-700 dark:text-blue-400">₹{(Number(totalAmount) || 0).toFixed(2)}</span>
             </div>
             <p className="mt-1 text-[10px] text-slate-400 flex items-center gap-1">
               <Lock className="h-3 w-3" />

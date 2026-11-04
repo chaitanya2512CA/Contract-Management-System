@@ -10,6 +10,7 @@ interface BadgeProps {
     | 'danger'
     | 'info'
     | 'purple'
+    | 'gold'
     | 'outline'
     | 'default';
   size?: 'sm' | 'md' | 'lg';
@@ -29,15 +30,16 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   const variantStyles = {
-    primary: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
-    secondary: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
-    default: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
-    success: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
-    warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
-    danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800',
-    info: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800',
-    purple: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800',
-    outline: 'bg-transparent text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+    primary: 'bg-amber-100 text-amber-900 dark:bg-[#1A1A1A] dark:text-[#D4AF37] border border-amber-200 dark:border-[#262118]',
+    gold: 'bg-[#1A1A1A] text-[#D4AF37] border border-[#262118]',
+    secondary: 'bg-slate-100 text-slate-700 dark:bg-[#121212] dark:text-[#A39E93] border border-slate-200 dark:border-[#262118]',
+    default: 'bg-slate-100 text-slate-700 dark:bg-[#121212] dark:text-[#A39E93] border border-slate-200 dark:border-[#262118]',
+    success: 'bg-emerald-100 text-emerald-800 dark:bg-[#10B981]/10 dark:text-[#10B981] border border-emerald-200 dark:border-[#10B981]/30',
+    warning: 'bg-amber-100 text-amber-800 dark:bg-[#D4AF37]/10 dark:text-[#D4AF37] border border-amber-200 dark:border-[#D4AF37]/30',
+    danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40',
+    info: 'bg-sky-100 text-sky-800 dark:bg-[#1A1A1A] dark:text-[#D4AF37] border border-sky-200 dark:border-[#262118]',
+    purple: 'bg-purple-100 text-purple-800 dark:bg-[#1A1A1A] dark:text-[#F5E6C4] border border-purple-200 dark:border-[#262118]',
+    outline: 'bg-transparent text-slate-700 dark:text-[#A39E93] border border-slate-300 dark:border-[#262118]',
   };
 
   return (

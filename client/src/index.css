@@ -11,25 +11,79 @@
 body {
   font-family: var(--font-sans);
   overflow-x: hidden;
+  background-color: #080808;
+  color: #F5E6C4;
 }
 
-/* Custom modern scrollbar */
+/* Custom Executive Gold scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #080808;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #262118;
   border-radius: 4px;
 }
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
-}
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #AA7C11;
+}
+
+/* Executive Black & Gold Global Palette Overrides */
+.dark body {
+  background-color: #080808 !important;
+  color: #F5E6C4 !important;
+}
+
+.dark .dark\:bg-slate-950 {
+  background-color: #080808 !important;
+}
+
+.dark .dark\:bg-slate-900 {
+  background-color: #121212 !important;
+}
+
+.dark .dark\:bg-slate-800 {
+  background-color: #1A1A1A !important;
+}
+
+.dark .dark\:border-slate-800,
+.dark .dark\:border-slate-700 {
+  border-color: #262118 !important;
+}
+
+.dark .dark\:text-blue-400,
+.dark .dark\:text-blue-500 {
+  color: #D4AF37 !important;
+}
+
+.dark .dark\:text-blue-300 {
+  color: #F5E6C4 !important;
+}
+
+.dark .dark\:bg-blue-900\/40,
+.dark .dark\:bg-blue-950\/40,
+.dark .dark\:bg-blue-950\/60 {
+  background-color: #1A1A1A !important;
+  border-color: #262118 !important;
+  color: #D4AF37 !important;
+}
+
+.dark .dark\:hover\:border-blue-600:hover,
+.dark .dark\:hover\:border-blue-400:hover {
+  border-color: #D4AF37 !important;
+}
+
+.dark .dark\:hover\:text-blue-400:hover,
+.dark .dark\:group-hover\:text-blue-400:hover {
+  color: #D4AF37 !important;
+}
+
+.dark .dark\:focus\:border-blue-600:focus,
+.dark .dark\:focus\:border-blue-500:focus {
+  border-color: #D4AF37 !important;
 }
 
 /* Smooth transitions */
