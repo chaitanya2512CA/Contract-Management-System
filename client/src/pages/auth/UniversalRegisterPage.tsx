@@ -38,17 +38,19 @@ export const UniversalRegisterPage: React.FC = () => {
       setError(null);
       const user = await register({
         name: name.trim(),
+        fullName: name.trim(),
         email: email.trim(),
         password,
         role,
         phone,
         companyName,
         city,
-        state,
+        state: (role === 'lawyer' && barState ? barState : state) || 'Delhi',
         primarySpecialty,
-        experienceYears,
-        barCouncilNumber,
-        barState,
+        experienceYears: Number(experienceYears) || 3,
+        barCouncilNumber: barCouncilNumber.trim(),
+        barRegistrationNumber: barCouncilNumber.trim(),
+        barState: barState || state || 'Delhi',
       });
 
       if (user.role === 'lawyer') {
@@ -59,12 +61,13 @@ export const UniversalRegisterPage: React.FC = () => {
         navigate('/client/dashboard');
       }
     } catch (err: any) {
+      console.error('[AUTH Registration Error UI]:', err);
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err.code === 'ERR_NETWORK' || !err.response) {
         setError('Unable to reach the authentication server. Please check your network connection.');
       } else {
-        setError('Registration failed. Please try again.');
+        setError(err.message || 'Registration failed. Please try again.');
       }
     } finally {
       setIsLoading(false);

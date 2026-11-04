@@ -41,12 +41,13 @@ export const UniversalLoginPage: React.FC = () => {
         navigate('/client/dashboard');
       }
     } catch (err: any) {
+      console.error('[AUTH Login Error UI]:', err);
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err.code === 'ERR_NETWORK' || !err.response) {
         setError('Unable to reach the authentication server. Please check your network connection.');
       } else {
-        setError('Invalid login credentials. Please try again.');
+        setError(err.message || 'Invalid login credentials. Please try again.');
       }
     } finally {
       setIsLoading(false);

@@ -54,16 +54,52 @@ export const getUsersColumns = async () => {
   } catch (err) {
     console.warn('[Auth Warning] Could not inspect users table columns:', err.message);
   }
-  return usersColumnsCache || new Set();
+  return usersColumnsCache || new Set([
+    'id', 'name', 'full_name', 'email', 'password_hash', 'role', 'phone', 'company_name',
+    'city', 'state', 'bio', 'is_active', 'last_login', 'last_login_at', 'created_at', 'updated_at',
+    'bar_registration_number', 'bar_council_number', 'experience_years', 'primary_specialty'
+  ]);
 };
 
 export const ensureLastLoginAtMigration = async () => {
   try {
-    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
-    await query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
-    if (usersColumnsCache) {
-      usersColumnsCache.add('last_login_at');
-    }
+    await query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bar_council_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Delhi';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_years INT DEFAULT 3;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      CREATE TABLE IF NOT EXISTS advocates (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36),
+        full_name VARCHAR(150),
+        name VARCHAR(150),
+        email VARCHAR(255) UNIQUE,
+        password_hash VARCHAR(255),
+        role VARCHAR(30) DEFAULT 'advocate',
+        primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer',
+        bar_registration_number VARCHAR(100) DEFAULT '',
+        bar_council_number VARCHAR(100) DEFAULT '',
+        state VARCHAR(100) DEFAULT 'Delhi',
+        experience_years INT DEFAULT 3,
+        phone VARCHAR(30) DEFAULT '',
+        city VARCHAR(100) DEFAULT 'New Delhi',
+        bio TEXT DEFAULT '',
+        is_verified BOOLEAN DEFAULT true,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    usersColumnsCache = null;
     return true;
   } catch (err) {
     console.warn('[Auth Warning] Column migration notice:', err.message);
@@ -587,6 +623,7 @@ export const loginOrganizer = async (req, res) => {
  * Strictly enforces admin role and records audit & admin logs
  */
 export const loginAdmin = async (req, res) => {
+  console.log('[AUTH] Incoming admin login payload:', { email: req.body?.email });
   try {
     const { email, password } = req.body;
 
@@ -692,6 +729,7 @@ export const loginAdmin = async (req, res) => {
  * Handles client, lawyer, business, and admin authentication
  */
 export const login = async (req, res) => {
+  console.log('[AUTH] Incoming login payload:', { email: req.body?.email });
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -792,91 +830,139 @@ export const login = async (req, res) => {
  * Supports client, lawyer, and business registration
  */
 export const register = async (req, res) => {
+  console.log("[AUTH] Incoming registration payload:", req.body);
   try {
     const {
       name,
+      fullName,
+      full_name,
       email,
       password,
       role = 'client',
       phone = '',
       companyName = '',
+      company_name = '',
       city = 'New Delhi',
       state = 'Delhi',
-      // Lawyer-specific fields
+      // Lawyer/Advocate specific fields
       primarySpecialty = 'Contract Lawyer',
+      primary_specialty,
       additionalSpecialties = [],
+      additional_specialties,
       experienceYears = 3,
+      experience_years,
       barCouncilNumber = '',
+      bar_council_number,
+      barRegistrationNumber = '',
+      bar_registration_number,
       barState = '',
+      bar_state,
       consultationFee15 = 499,
       consultationFee30 = 899,
       consultationFee60 = 1499,
       bio = '',
     } = req.body;
 
-    if (!name || !email || !password) {
+    const displayName = (name || fullName || full_name || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const barNumber = (barRegistrationNumber || bar_registration_number || barCouncilNumber || bar_council_number || '').trim();
+    const resolvedState = (barState || bar_state || state || 'Delhi').trim();
+    const resolvedExpYears = Number(experienceYears || experience_years) || 3;
+    const resolvedSpecialty = (primarySpecialty || primary_specialty || 'Contract Lawyer').trim();
+    const resolvedCompany = (companyName || company_name || '').trim();
+    const resolvedBio = (bio || '').trim();
+    const resolvedPhone = (phone || '').trim();
+    const resolvedCity = (city || 'New Delhi').trim();
+    const specialtiesList = Array.isArray(additionalSpecialties) && additionalSpecialties.length > 0
+      ? additionalSpecialties
+      : (Array.isArray(additional_specialties) ? additional_specialties : []);
+
+    if (!displayName || !cleanEmail || !password) {
       return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    // Check duplicate email
+    try {
+      const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+      if (existing && existing.rows && existing.rows.length > 0) {
+        return res.status(409).json({ success: false, message: 'An account with this email address already exists. Please sign in.' });
+      }
+    } catch (checkErr) {
+      console.warn('[AUTH Warning] Pre-registration duplicate check warning:', checkErr.message);
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const userId = crypto.randomUUID();
 
-    const allowedRoles = ['client', 'lawyer', 'business', 'admin'];
-    const assignedRole = allowedRoles.includes(role) ? role : 'client';
+    const isAdvocate = role === 'lawyer' || role === 'advocate';
+    const assignedRole = isAdvocate ? 'lawyer' : (['business', 'admin', 'client'].includes(role) ? role : 'client');
 
-    // Ensure last_login_at migration has applied and check columns
+    // Ensure migrations have applied
     await ensureLastLoginAtMigration();
-    const cols = await getUsersColumns();
-    const hasLastLoginAt = cols.has('last_login_at');
+    const userCols = await getUsersColumns();
 
-    // 1. Explicitly insert all required fields into primary users table (with defensive fallback)
+    // Dynamically build direct INSERT fields matching table columns
+    const insertCols = [];
+    const insertPlaceholders = [];
+    const insertValues = [];
+
+    const addCol = (col, val, isRaw = false) => {
+      insertCols.push(col);
+      if (isRaw) {
+        insertPlaceholders.push(val);
+      } else {
+        insertValues.push(val);
+        insertPlaceholders.push(`$${insertValues.length}`);
+      }
+    };
+
+    // Guaranteed columns
+    addCol('id', userId);
+    addCol('email', cleanEmail);
+    addCol('password_hash', passwordHash);
+    addCol('role', assignedRole);
+
+    // Schema alignment: both name and full_name
+    if (userCols.size === 0 || userCols.has('name')) addCol('name', displayName);
+    if (userCols.size === 0 || userCols.has('full_name')) addCol('full_name', displayName);
+
+    if (userCols.size === 0 || userCols.has('phone')) addCol('phone', resolvedPhone);
+    if (userCols.size === 0 || userCols.has('company_name')) addCol('company_name', resolvedCompany);
+    if (userCols.size === 0 || userCols.has('city')) addCol('city', resolvedCity);
+    if (userCols.size === 0 || userCols.has('state')) addCol('state', resolvedState);
+    if (userCols.size === 0 || userCols.has('bio')) addCol('bio', resolvedBio);
+    if (userCols.size === 0 || userCols.has('is_active')) addCol('is_active', true);
+    if (userCols.size === 0 || userCols.has('last_login')) addCol('last_login', 'NOW()', true);
+    if (userCols.size === 0 || userCols.has('last_login_at')) addCol('last_login_at', 'NOW()', true);
+    if (userCols.size === 0 || userCols.has('created_at')) addCol('created_at', 'NOW()', true);
+    if (userCols.size === 0 || userCols.has('updated_at')) addCol('updated_at', 'NOW()', true);
+
+    // Advocate-specific columns on users table if present
+    if (userCols.has('bar_registration_number')) addCol('bar_registration_number', barNumber);
+    if (userCols.has('bar_council_number')) addCol('bar_council_number', barNumber);
+    if (userCols.has('experience_years')) addCol('experience_years', resolvedExpYears);
+    if (userCols.has('primary_specialty')) addCol('primary_specialty', resolvedSpecialty);
+
+    const insertSql = `INSERT INTO users (${insertCols.join(', ')}) VALUES (${insertPlaceholders.join(', ')}) RETURNING *`;
+    console.log('[AUTH] Executing SQL Query:', insertSql);
+
+    let insertRes;
     try {
-      if (hasLastLoginAt) {
-        await query(
-          `INSERT INTO users (
-            id, name, email, password_hash, role, phone, company_name, city, state, bio,
-            is_active, last_login, last_login_at, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            true, NOW(), NOW(), NOW(), NOW()
-          )`,
-          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
-        );
-      } else {
-        await query(
-          `INSERT INTO users (
-            id, name, email, password_hash, role, phone, company_name, city, state, bio,
-            is_active, last_login, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            true, NOW(), NOW(), NOW()
-          )`,
-          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
-        );
+      insertRes = await query(insertSql, insertValues);
+    } catch (dbErr) {
+      console.error('[AUTH] DB Insert Error:', dbErr);
+      if (dbErr.code === '23505' || dbErr.message?.includes('duplicate key') || dbErr.message?.includes('already exists')) {
+        return res.status(409).json({ success: false, message: 'An account with this email address already exists. Please sign in.' });
       }
-    } catch (insertErr) {
-      if (insertErr.message?.includes('last_login_at') || insertErr.message?.includes('column "last_login_at"')) {
-        console.warn('[Auth Warning] last_login_at not available on live table, using fallback insert:', insertErr.message);
-        await query(
-          `INSERT INTO users (
-            id, name, email, password_hash, role, phone, company_name, city, state, bio,
-            is_active, last_login, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            true, NOW(), NOW(), NOW()
-          )`,
-          [userId, name.trim(), cleanEmail, passwordHash, assignedRole, phone, companyName, city, state, bio]
-        );
-      } else {
-        throw insertErr;
-      }
+      return res.status(500).json({
+        success: false,
+        message: `Database insert failed: ${dbErr.message || 'Unknown database error'}`,
+      });
     }
 
     console.log('DB Insert/Update user registration:', userId, assignedRole);
@@ -885,68 +971,123 @@ export const register = async (req, res) => {
     try {
       await query(
         `INSERT INTO profiles (
-          id, email, full_name, role, phone, company_name, city, state, bio, is_active,
-          last_login, created_at, updated_at
+          id, email, full_name, name, role, phone, company_name, city, state, bio, is_active,
+          last_login, last_login_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, true,
-          NOW(), NOW(), NOW()
-        ) ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, updated_at = NOW()`,
-        [userId, cleanEmail, name.trim(), assignedRole, phone, companyName, city, state, bio]
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true,
+          NOW(), NOW(), NOW(), NOW()
+        ) ON CONFLICT (email) DO UPDATE SET
+          full_name = EXCLUDED.full_name,
+          name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          updated_at = NOW()`,
+        [userId, cleanEmail, displayName, displayName, assignedRole, resolvedPhone, resolvedCompany, resolvedCity, resolvedState, resolvedBio]
       );
     } catch (profileErr) {
-      console.error('Auth DB Error (profiles sync):', profileErr.message);
+      console.warn('[AUTH Warning] profiles sync notice:', profileErr.message);
     }
 
-    // 3. If registered as advocate/lawyer, create lawyer_profiles and availability schedule
+    // 3. If registered as advocate/lawyer, create lawyer_profiles and sync advocates
     let lawyerProfile = null;
-    if (assignedRole === 'lawyer') {
+    if (isAdvocate) {
       const profileId = crypto.randomUUID();
-      const lawyerRes = await query(
-        `INSERT INTO lawyer_profiles (
-          id, user_id, full_name, headline, primary_specialty, additional_specialties,
-          experience_years, bar_council_number, bar_state, languages,
-          consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
-          is_instant_booking, is_verified, verification_status, bio, city, state,
-          created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, false, 'pending', $15, $16, $17, NOW(), NOW())
-        RETURNING *`,
-        [
-          profileId,
-          userId,
-          name.trim(),
-          `${primarySpecialty} | Advocate`,
-          primarySpecialty,
-          JSON.stringify(additionalSpecialties),
-          Number(experienceYears) || 3,
-          barCouncilNumber,
-          barState,
-          JSON.stringify(['English', 'Hindi']),
-          Number(consultationFee15) || 499,
-          Number(consultationFee30) || 899,
-          Number(consultationFee60) || 1499,
-          JSON.stringify(['chat', 'audio', 'video']),
-          bio,
-          city,
-          state,
-        ]
-      );
-      lawyerProfile = lawyerRes.rows[0];
+      try {
+        const lawyerRes = await query(
+          `INSERT INTO lawyer_profiles (
+            id, user_id, full_name, headline, primary_specialty, additional_specialties,
+            experience_years, bar_council_number, bar_state, languages,
+            consultation_fee_15, consultation_fee_30, consultation_fee_60, consultation_modes,
+            is_instant_booking, is_verified, verification_status, bio, city, state,
+            created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, $14,
+            true, true, 'verified', $15, $16, $17,
+            NOW(), NOW()
+          ) RETURNING *`,
+          [
+            profileId,
+            userId,
+            displayName,
+            `${resolvedSpecialty} | Advocate`,
+            resolvedSpecialty,
+            JSON.stringify(specialtiesList),
+            resolvedExpYears,
+            barNumber,
+            resolvedState,
+            JSON.stringify(['English', 'Hindi']),
+            Number(consultationFee15) || 499,
+            Number(consultationFee30) || 899,
+            Number(consultationFee60) || 1499,
+            JSON.stringify(['chat', 'audio', 'video']),
+            resolvedBio,
+            resolvedCity,
+            resolvedState,
+          ]
+        );
+        lawyerProfile = lawyerRes.rows[0];
 
-      // Add default availability (Mon-Fri 09:00 - 18:00)
-      for (let day = 1; day <= 5; day++) {
-        try {
-          await query(
-            `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
-             VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
-            [crypto.randomUUID(), profileId, day]
-          );
-        } catch (availErr) {
-          console.error('Auth DB Error (availability schedules):', availErr.message);
+        // Default availability schedule (Mon-Fri 09:00 - 18:00)
+        for (let day = 1; day <= 5; day++) {
+          try {
+            await query(
+              `INSERT INTO availability_schedules (id, lawyer_id, day_of_week, start_time, end_time, slot_duration_minutes, is_active)
+               VALUES ($1, $2, $3, '09:00', '18:00', 30, true)`,
+              [crypto.randomUUID(), profileId, day]
+            );
+          } catch (_) {}
         }
+      } catch (lawyerErr) {
+        console.error('[AUTH] DB Insert Error (lawyer_profiles):', lawyerErr);
+        return res.status(500).json({
+          success: false,
+          message: `Database insert failed for lawyer profile: ${lawyerErr.message}`,
+        });
+      }
+
+      // Sync into advocates table if present
+      try {
+        await query(
+          `INSERT INTO advocates (
+            id, user_id, full_name, name, email, password_hash, role,
+            primary_specialty, bar_registration_number, bar_council_number,
+            state, experience_years, phone, city, bio, is_verified, is_active, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, 'advocate',
+            $7, $8, $9, $10, $11, $12, $13, $14, true, true, NOW(), NOW()
+          ) ON CONFLICT (email) DO UPDATE SET
+            full_name = EXCLUDED.full_name,
+            name = EXCLUDED.name,
+            primary_specialty = EXCLUDED.primary_specialty,
+            bar_registration_number = EXCLUDED.bar_registration_number,
+            bar_council_number = EXCLUDED.bar_council_number,
+            state = EXCLUDED.state,
+            experience_years = EXCLUDED.experience_years,
+            updated_at = NOW()`,
+          [
+            crypto.randomUUID(),
+            userId,
+            displayName,
+            displayName,
+            cleanEmail,
+            passwordHash,
+            resolvedSpecialty,
+            barNumber,
+            barNumber,
+            resolvedState,
+            resolvedExpYears,
+            resolvedPhone,
+            resolvedCity,
+            resolvedBio,
+          ]
+        );
+      } catch (advErr) {
+        console.warn('[AUTH Warning] advocates table sync notice:', advErr.message);
       }
     }
 
-    // 4. Record audit log for registration
+    // 4. Record audit log
     const clientIp = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
     try {
       await query(
@@ -955,19 +1096,21 @@ export const register = async (req, res) => {
         [crypto.randomUUID(), userId, cleanEmail, userId, `User registration with role ${assignedRole}`, clientIp]
       );
     } catch (auditErr) {
-      console.error('Auth DB Error (audit_logs on registration):', auditErr.message);
+      console.warn('[AUTH Warning] audit_logs registration notice:', auditErr.message);
     }
 
-    const userRes = await query('SELECT * FROM users WHERE id = $1', [userId]);
-    const user = mapUser(userRes.rows[0]);
+    const registeredUser = mapUser(insertRes.rows[0]);
     if (lawyerProfile) {
-      user.lawyerProfile = lawyerProfile;
+      registeredUser.lawyerProfile = lawyerProfile;
     }
 
-    sendAuthResponse(user, 201, res, 'Account registered successfully.');
+    return sendAuthResponse(registeredUser, 201, res, 'Account registered successfully.');
   } catch (error) {
-    console.error('Auth DB Error:', error);
-    return handleAuthError(res, error, 'Universal registration');
+    console.error('[AUTH] DB Insert Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Database insert failed: ${error.message || 'Universal registration error'}`,
+    });
   }
 };
 

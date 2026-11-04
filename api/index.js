@@ -11,12 +11,61 @@ let initPromise = null;
 async function initializeApp() {
   await connectDB();
 
+  // Execute progressive column and table migrations for persistent authentication
   try {
-    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
-    await query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
-    console.log('[Vercel Serverless] Ensured last_login_at column exists in users and profiles tables.');
+    await query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bar_council_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Delhi';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_years INT DEFAULT 3;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bar_council_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Delhi';
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS experience_years INT DEFAULT 3;
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS bar_council_number VARCHAR(100) DEFAULT '';
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Delhi';
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS experience_years INT DEFAULT 3;
+
+      CREATE TABLE IF NOT EXISTS advocates (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36),
+        full_name VARCHAR(150),
+        name VARCHAR(150),
+        email VARCHAR(255) UNIQUE,
+        password_hash VARCHAR(255),
+        role VARCHAR(30) DEFAULT 'advocate',
+        primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer',
+        bar_registration_number VARCHAR(100) DEFAULT '',
+        bar_council_number VARCHAR(100) DEFAULT '',
+        state VARCHAR(100) DEFAULT 'Delhi',
+        experience_years INT DEFAULT 3,
+        phone VARCHAR(30) DEFAULT '',
+        city VARCHAR(100) DEFAULT 'New Delhi',
+        bio TEXT DEFAULT '',
+        is_verified BOOLEAN DEFAULT true,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    console.log('[Vercel Serverless] Ensured schema columns and tables exist in database.');
   } catch (migErr) {
-    console.warn('[Vercel Serverless] Migration notice for last_login_at:', migErr.message);
+    console.warn('[Vercel Serverless] Migration notice:', migErr.message);
   }
 
   // Purge any legacy mock advocate test data so the database contains only genuine registered advocates
