@@ -1,3 +1,4 @@
+import { Pool as NeonPool } from '@neondatabase/serverless';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -83,15 +84,15 @@ export const getTrustedCACertificates = () => {
 export const getConnectionString = () => {
   const raw =
     process.env.DATABASE_URL ||
-    process.env.SUPABASE_DATABASE_URL ||
+    process.env.NEON_DATABASE_URL ||
+    process.env.NEON_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_PRISMA_URL ||
     process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.SUPABASE_DATABASE_URL ||
     process.env.SUPABASE_DB_URL ||
     process.env.SUPABASE_POSTGRES_URL ||
     process.env.DATABASE_URL_UNPOOLED ||
-    process.env.NEON_DATABASE_URL ||
-    process.env.NEON_URL ||
     process.env.POSTGRES_URL_NO_SSL ||
     process.env.VERCEL_POSTGRES_URL ||
     process.env.DB_URL ||
@@ -389,7 +390,20 @@ export const connectDB = async () => {
         poolConfig.ssl = false;
       }
 
-      const newPool = new Pool(poolConfig);
+      const isNeonHost = parsed.host && parsed.host.includes('neon.tech');
+      let newPool;
+
+      if (isNeonHost) {
+        console.log('[DB] Connecting to Neon PostgreSQL using @neondatabase/serverless WebSocket pooler...');
+        newPool = new NeonPool({
+          connectionString: connStr,
+          max: isVercel ? 2 : 10,
+          connectionTimeoutMillis: 10000,
+        });
+      } else {
+        newPool = new Pool(poolConfig);
+      }
+
       newPool.on('error', (err) => {
         console.warn('[DB Background Pool Notice]:', err.message);
       });

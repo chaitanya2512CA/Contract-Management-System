@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS user_roles (
   assigned_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User Sessions for Secure Session Management
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  session_token VARCHAR(255) UNIQUE NOT NULL,
+  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+  user_agent TEXT DEFAULT '',
+  is_valid BOOLEAN DEFAULT true,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 4. Lawyer Categories
 CREATE TABLE IF NOT EXISTS lawyer_categories (
   id VARCHAR(36) PRIMARY KEY,
@@ -145,6 +158,19 @@ CREATE TABLE IF NOT EXISTS lawyer_verifications (
   reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
   reviewed_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS verification_requests (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  lawyer_id VARCHAR(36) REFERENCES lawyer_profiles(id) ON DELETE CASCADE,
+  status VARCHAR(25) DEFAULT 'pending' CHECK (status IN ('pending', 'under_review', 'approved', 'rejected')),
+  documents JSONB DEFAULT '[]',
+  admin_notes TEXT DEFAULT '',
+  reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 9. Availability Schedules & Lawyer Availability
@@ -427,6 +453,16 @@ CREATE TABLE IF NOT EXISTS case_documents (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS case_notes (
+  id VARCHAR(36) PRIMARY KEY,
+  case_id VARCHAR(36) REFERENCES legal_cases(id) ON DELETE CASCADE,
+  author_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+  note_text TEXT NOT NULL,
+  is_private BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 15. Reviews
 CREATE TABLE IF NOT EXISTS client_reviews (
   id VARCHAR(36) PRIMARY KEY,
@@ -630,6 +666,13 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 CREATE TABLE IF NOT EXISTS platform_settings (
+  key VARCHAR(100) PRIMARY KEY,
+  value JSONB NOT NULL,
+  description TEXT DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS system_settings (
   key VARCHAR(100) PRIMARY KEY,
   value JSONB NOT NULL,
   description TEXT DEFAULT '',
