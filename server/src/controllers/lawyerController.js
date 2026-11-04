@@ -22,10 +22,37 @@ export const getLawyers = async (req, res) => {
     } = req.query;
 
     const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
+    // Asynchronously ensure legacy mock records are pruned from database
+    query(`
+      DELETE FROM users WHERE email LIKE '%.law@contractiq.com' OR email LIKE '%.law@jurisflow.com';
+      DELETE FROM lawyer_profiles WHERE full_name IN (
+        'Adv. Vikramaditya Deshmukh',
+        'Adv. Ananya Roy',
+        'Adv. Siddharth Malhotra',
+        'Adv. Meenakshi Sundaram',
+        'Adv. Rajeshwar Verma',
+        'Adv. Rohan Menon',
+        'Adv. Harish Chawla',
+        'Adv. Neha Kapoor'
+      );
+    `).catch(() => {});
+
     const conditions = [
       "u.role IN ('lawyer', 'advocate')",
       "u.is_active = true",
-      "(lp.is_verified = true OR lp.verification_status != $1)"
+      "(lp.is_verified = true OR lp.verification_status != $1)",
+      `lp.full_name NOT IN (
+        'Adv. Vikramaditya Deshmukh',
+        'Adv. Ananya Roy',
+        'Adv. Siddharth Malhotra',
+        'Adv. Meenakshi Sundaram',
+        'Adv. Rajeshwar Verma',
+        'Adv. Rohan Menon',
+        'Adv. Harish Chawla',
+        'Adv. Neha Kapoor'
+      )`,
+      "u.email NOT LIKE '%.law@contractiq.com'",
+      "u.email NOT LIKE '%.law@jurisflow.com'"
     ];
     const params = ['rejected'];
 

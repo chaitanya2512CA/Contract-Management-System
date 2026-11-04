@@ -43,7 +43,22 @@ export const LandingPage: React.FC = () => {
       try {
         const res = await lawyerService.getLawyers({ limit: 4 });
         if (res.data.success) {
-          setTopLawyers(res.data.lawyers);
+          const mockNames = [
+            'Adv. Vikramaditya Deshmukh',
+            'Adv. Ananya Roy',
+            'Adv. Siddharth Malhotra',
+            'Adv. Meenakshi Sundaram',
+            'Adv. Rajeshwar Verma',
+            'Adv. Rohan Menon',
+            'Adv. Harish Chawla',
+            'Adv. Neha Kapoor',
+          ];
+          const genuineLawyers = (res.data.lawyers || []).filter(
+            (l: LawyerProfile) =>
+              !mockNames.includes(l.full_name) &&
+              !l.email?.includes('.law@')
+          );
+          setTopLawyers(genuineLawyers);
         }
       } catch (err) {
         console.error('Error fetching featured advocates:', err);
@@ -228,7 +243,7 @@ export const LandingPage: React.FC = () => {
                   <Scale className="h-7 w-7" />
                 </div>
                 <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-                  No advocates registered yet. Be the first advocate to join JurisFlow!
+                  No advocates registered yet. Be the first to join JurisFlow!
                 </h3>
                 <p className="mx-auto mt-2 max-w-md text-xs text-slate-500 dark:text-slate-400">
                   Connect with verified clients seeking legal counsel across 15 practice specialties.

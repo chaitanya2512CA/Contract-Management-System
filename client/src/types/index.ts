@@ -67,6 +67,7 @@ export interface LawyerProfile {
   city: string;
   state: string;
   avatar?: string;
+  email?: string;
   contact_phone?: string;
   bank_account_number?: string;
   bank_ifsc?: string;

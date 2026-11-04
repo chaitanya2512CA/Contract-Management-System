@@ -60,7 +60,22 @@ export const LawyerDirectoryPage: React.FC = () => {
       };
       const res = await lawyerService.getLawyers(params);
       if (res.data.success) {
-        setLawyers(res.data.lawyers);
+        const mockNames = [
+          'Adv. Vikramaditya Deshmukh',
+          'Adv. Ananya Roy',
+          'Adv. Siddharth Malhotra',
+          'Adv. Meenakshi Sundaram',
+          'Adv. Rajeshwar Verma',
+          'Adv. Rohan Menon',
+          'Adv. Harish Chawla',
+          'Adv. Neha Kapoor',
+        ];
+        const genuineLawyers = (res.data.lawyers || []).filter(
+          (l: LawyerProfile) =>
+            !mockNames.includes(l.full_name) &&
+            !l.email?.includes('.law@')
+        );
+        setLawyers(genuineLawyers);
       }
     } catch (err) {
       console.error('Failed to fetch advocates:', err);
@@ -214,7 +229,7 @@ export const LawyerDirectoryPage: React.FC = () => {
             <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
               {searchQuery || selectedSpecialty !== 'all' || selectedMode || verifiedOnly
                 ? 'No advocates matched your criteria'
-                : 'No advocates registered yet. Be the first advocate to join JurisFlow!'}
+                : 'No advocates registered yet. Be the first to join JurisFlow!'}
             </h3>
             <p className="mx-auto mt-2 max-w-md text-xs text-slate-500 dark:text-slate-400">
               {searchQuery || selectedSpecialty !== 'all' || selectedMode || verifiedOnly
