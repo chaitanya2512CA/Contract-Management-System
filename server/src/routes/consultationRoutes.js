@@ -9,6 +9,11 @@ import {
   completeConsultation,
   startInstantConsultation,
   endConsultationSession,
+  createConsultationRequest,
+  getConsultationRequestStatus,
+  getIncomingConsultationRequests,
+  respondToConsultationRequest,
+  cancelConsultationRequest,
 } from '../controllers/consultationController.js';
 import {
   getMessagesByBooking,
@@ -19,6 +24,13 @@ import { protect } from '../middleware/auth.js';
 const router = express.Router();
 
 router.use(protect);
+
+// Astrotalk Request-and-Accept Flow APIs
+router.post('/requests', createConsultationRequest);
+router.get('/requests/incoming', getIncomingConsultationRequests);
+router.get('/requests/:id', getConsultationRequestStatus);
+router.put('/requests/:id/respond', respondToConsultationRequest);
+router.put('/requests/:id/cancel', cancelConsultationRequest);
 
 // Astrotalk Instant Consultation APIs
 router.post('/instant-start', startInstantConsultation);

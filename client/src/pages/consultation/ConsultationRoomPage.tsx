@@ -6,30 +6,24 @@ import {
   Mic,
   MicOff,
   PhoneOff,
-  Phone,
-  PhoneCall,
   Volume2,
   VolumeX,
-  Share2,
   MessageSquare,
   FileText,
   Clock,
-  Shield,
   ShieldCheck,
   Send,
-  Paperclip,
-  CheckCircle2,
   AlertCircle,
   Star,
-  Download,
-  Info,
   Zap,
   Lock,
+  Radio,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import { consultationService, reviewService } from '../../services/api';
 import { ConsultationBooking, ChatMessage } from '../../types';
 import { useAuth } from '../../context/AuthContext';
-import { Badge } from '../../components/common/Badge';
 
 export const ConsultationRoomPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +44,6 @@ export const ConsultationRoomPage: React.FC = () => {
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState<boolean>(true);
-  const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [showInCallChat, setShowInCallChat] = useState<boolean>(false);
 
   // Active Talk-Time Elapsed Timer (counts up)
@@ -67,6 +60,15 @@ export const ConsultationRoomPage: React.FC = () => {
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  const isRequestPending =
+    (consultation?.status as string) === 'pending' ||
+    (consultation as any)?.request_status === 'pending';
+
+  const isRequestDeclined =
+    (consultation?.status as string) === 'declined' ||
+    (consultation?.status as string) === 'rejected' ||
+    (consultation as any)?.request_status === 'declined';
+
   const fetchConsultationData = async () => {
     if (!id) return;
     try {
@@ -79,7 +81,7 @@ export const ConsultationRoomPage: React.FC = () => {
 
       // Fetch chat messages
       const msgRes = await consultationService.getMessages(id);
-      if (msgRes.data.success) {
+      if (msgRes.data?.success) {
         setMessages(msgRes.data.messages || []);
       }
     } catch (err: any) {
@@ -93,15 +95,19 @@ export const ConsultationRoomPage: React.FC = () => {
     fetchConsultationData();
   }, [id]);
 
-  // Astrotalk Ringing to Connected transition (2.2 seconds simulation)
+  // Astrotalk Ringing to Connected transition (waits for acceptance if pending)
   useEffect(() => {
+    if (isRequestPending || isRequestDeclined) {
+      setCallStatus('ringing');
+      return;
+    }
     const ringTimeout = setTimeout(() => {
       setCallStatus('connected');
     }, 2200);
     return () => clearTimeout(ringTimeout);
-  }, []);
+  }, [isRequestPending, isRequestDeclined]);
 
-  // Real-time chat updates via periodic polling
+  // Real-time chat & status updates via periodic polling
   useEffect(() => {
     if (!id) return;
     const pollInterval = setInterval(async () => {
@@ -110,21 +116,29 @@ export const ConsultationRoomPage: React.FC = () => {
         if (msgRes.data?.success && Array.isArray(msgRes.data.messages)) {
           setMessages(msgRes.data.messages);
         }
+
+        // If request was pending, poll consultation details to detect when accepted
+        if (isRequestPending) {
+          const detailRes = await consultationService.getById(id);
+          if (detailRes.data?.success && detailRes.data.consultation) {
+            setConsultation(detailRes.data.consultation);
+          }
+        }
       } catch (_) {}
     }, 3000);
     return () => {
       clearInterval(pollInterval);
     };
-  }, [id]);
+  }, [id, isRequestPending]);
 
-  // Active session talk-time counter (counts up)
+  // Active session talk-time counter (counts up only once accepted)
   useEffect(() => {
-    if (callStatus === 'ended') return;
+    if (callStatus === 'ended' || isRequestPending || isRequestDeclined) return;
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [callStatus]);
+  }, [callStatus, isRequestPending, isRequestDeclined]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -133,13 +147,13 @@ export const ConsultationRoomPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !id) return;
+    if (!newMessage.trim() || !id || isRequestPending || isRequestDeclined) return;
     try {
       const res = await consultationService.sendMessage(id, {
         content: newMessage.trim(),
         messageType: 'text',
       });
-      if (res.data.success) {
+      if (res.data?.success) {
         setMessages((prev) => [...prev, res.data.message]);
         setNewMessage('');
       }
@@ -239,7 +253,9 @@ export const ConsultationRoomPage: React.FC = () => {
   }
 
   const isLawyer = user?.role === 'lawyer';
-  const effectiveMode = urlMode || consultation.consultation_mode || 'chat';
+  const isChatPath = window.location.pathname.includes('/consultation/chat/');
+  const isCallPath = window.location.pathname.includes('/consultation/call/');
+  const effectiveMode = isChatPath ? 'chat' : isCallPath ? 'call' : urlMode || consultation.consultation_mode || 'chat';
   const isCallMode = effectiveMode === 'call' || effectiveMode === 'audio' || effectiveMode === 'video';
 
   const feeAmount = Number(consultation.fee_amount || 499);
@@ -272,10 +288,22 @@ export const ConsultationRoomPage: React.FC = () => {
               <h2 className="text-sm font-bold text-white sm:text-base">
                 {isLawyer ? consultation.client_name : consultation.lawyer_name}
               </h2>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-bold text-[#10B981] ring-1 ring-[#10B981]/30">
-                <ShieldCheck className="h-3 w-3" />
-                Live Session
-              </span>
+              {isRequestPending ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400 ring-1 ring-amber-500/30 animate-pulse">
+                  <Radio className="h-3 w-3" />
+                  Waiting for Advocate Acceptance...
+                </span>
+              ) : isRequestDeclined ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-bold text-rose-400 ring-1 ring-rose-500/30">
+                  <AlertCircle className="h-3 w-3" />
+                  Consultation Declined
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-bold text-[#10B981] ring-1 ring-[#10B981]/30">
+                  <ShieldCheck className="h-3 w-3" />
+                  Live Session
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-[#A39E93]">
               {consultation.practice_area} • Ref: {consultation.booking_ref}
@@ -342,10 +370,20 @@ export const ConsultationRoomPage: React.FC = () => {
 
               {/* Status Indicator */}
               <div className="mt-2 flex items-center gap-2">
-                {callStatus === 'ringing' ? (
+                {isRequestPending ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-[#1A1A1A] px-3.5 py-1 text-xs font-bold text-amber-400">
+                    <Radio className="h-3.5 w-3.5 animate-pulse text-amber-400" />
+                    Waiting for Advocate Acceptance...
+                  </span>
+                ) : isRequestDeclined ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-[#1A1A1A] px-3.5 py-1 text-xs font-bold text-rose-400">
+                    <AlertCircle className="h-3.5 w-3.5 text-rose-400" />
+                    Call Request Declined
+                  </span>
+                ) : callStatus === 'ringing' ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#262118] bg-[#1A1A1A] px-3 py-1 text-xs font-bold text-[#D4AF37]">
                     <span className="h-2 w-2 animate-ping rounded-full bg-[#D4AF37]" />
-                    Ringing Advocate...
+                    Connecting Audio Line...
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1 text-xs font-bold text-[#10B981] ring-1 ring-[#10B981]/30">
@@ -420,13 +458,12 @@ export const ConsultationRoomPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* Full Chat Consultation Interface */
+          /* Text Chat Canvas */
           <div className="flex flex-1 flex-col bg-[#080808]">
-            {/* Chat Messages Stream */}
-            <div className="flex-1 space-y-3 overflow-y-auto p-4 sm:p-6">
-              {/* Session Initiation Notice */}
-              <div className="mx-auto max-w-md rounded-2xl border border-[#262118] bg-[#121212] p-3.5 text-center text-xs text-[#A39E93]">
-                <p className="font-bold text-white">Instant Legal Consultation Active</p>
+            {/* Chat Messages Scroll */}
+            <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+              <div className="rounded-2xl border border-[#262118] bg-[#121212] p-3 text-center text-xs text-[#A39E93]">
+                <p className="font-semibold text-white">Encrypted Attorney-Client Chat Channel</p>
                 <p className="text-[11px] mt-0.5">
                   Consulting with {consultation.lawyer_name} • Billed at ₹{perMinute}/min
                 </p>
@@ -455,40 +492,60 @@ export const ConsultationRoomPage: React.FC = () => {
             </div>
 
             {/* Quick Suggestion Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto border-t border-[#262118] bg-[#0D0D0D] px-4 py-2">
-              <span className="text-[10px] font-bold uppercase text-[#A39E93] shrink-0">Quick Queries:</span>
-              {[
-                'Can we review my vendor agreement?',
-                'What is the anticipatory bail procedure?',
-                'Need reply to Section 138 notice',
-                'Explain founder equity lock-in',
-              ].map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => setNewMessage(chip)}
-                  className="shrink-0 rounded-full border border-[#262118] bg-[#121212] px-3 py-1 text-[11px] text-[#A39E93] transition hover:border-[#D4AF37] hover:text-[#D4AF37]"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
+            {!isRequestPending && !isRequestDeclined && (
+              <div className="flex items-center gap-2 overflow-x-auto border-t border-[#262118] bg-[#0D0D0D] px-4 py-2">
+                <span className="text-[10px] font-bold uppercase text-[#A39E93] shrink-0">Quick Queries:</span>
+                {[
+                  'Can we review my vendor agreement?',
+                  'What is the anticipatory bail procedure?',
+                  'Need reply to Section 138 notice',
+                  'Explain founder equity lock-in',
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => setNewMessage(chip)}
+                    className="shrink-0 rounded-full border border-[#262118] bg-[#121212] px-3 py-1 text-[11px] text-[#A39E93] transition hover:border-[#D4AF37] hover:text-[#D4AF37]"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* Chat Input Bar */}
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2 border-t border-[#262118] bg-[#0D0D0D] p-3 sm:px-6">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={`Ask ${consultation.lawyer_name} anything legal...`}
-                className="flex-1 rounded-2xl border border-[#262118] bg-[#121212] px-4 py-3 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none transition"
-              />
-              <button
-                type="submit"
-                className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-xs font-bold text-[#080808] shadow-md hover:bg-[#AA7C11] transition"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </form>
+            {/* Chat Input Bar or Waiting Guard */}
+            {isRequestPending ? (
+              <div className="flex items-center justify-center gap-2 border-t border-[#262118] bg-[#0D0D0D] p-4 text-xs text-amber-300">
+                <Loader2 className="h-4 w-4 animate-spin text-[#D4AF37]" />
+                <span>Waiting for advocate acceptance... Messages will be enabled once accepted.</span>
+              </div>
+            ) : isRequestDeclined ? (
+              <div className="flex items-center justify-between gap-2 border-t border-[#262118] bg-[#0D0D0D] p-4 text-xs text-rose-300">
+                <span>This consultation request was declined by the advocate.</span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/lawyers')}
+                  className="rounded-xl bg-[#D4AF37] px-3 py-1.5 text-xs font-bold text-black"
+                >
+                  Find Another Advocate
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2 border-t border-[#262118] bg-[#0D0D0D] p-3 sm:px-6">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder={`Ask ${consultation.lawyer_name} anything legal...`}
+                  className="flex-1 rounded-2xl border border-[#262118] bg-[#121212] px-4 py-3 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none transition"
+                />
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-xs font-bold text-[#080808] shadow-md hover:bg-[#AA7C11] transition"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
+            )}
           </div>
         )}
 
@@ -551,21 +608,32 @@ export const ConsultationRoomPage: React.FC = () => {
                     <div ref={chatBottomRef} />
                   </div>
 
-                  <form onSubmit={handleSendMessage} className="mt-3 flex items-center gap-2 border-t border-[#262118] pt-3">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type message..."
-                      className="flex-1 rounded-xl border border-[#262118] bg-[#121212] px-3 py-2 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-xl bg-[#D4AF37] p-2 text-[#080808] hover:bg-[#AA7C11] transition"
-                    >
-                      <Send className="h-4 w-4" />
-                    </button>
-                  </form>
+                  {isRequestPending ? (
+                    <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#262118] pt-3 text-xs text-amber-300">
+                      <Loader2 className="h-4 w-4 animate-spin text-[#D4AF37]" />
+                      <span>Waiting for advocate acceptance...</span>
+                    </div>
+                  ) : isRequestDeclined ? (
+                    <div className="mt-3 flex items-center justify-center border-t border-[#262118] pt-3 text-xs text-rose-300">
+                      <span>Request was declined.</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSendMessage} className="mt-3 flex items-center gap-2 border-t border-[#262118] pt-3">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type message..."
+                        className="flex-1 rounded-xl border border-[#262118] bg-[#121212] px-3 py-2 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-xl bg-[#D4AF37] p-2 text-[#080808] hover:bg-[#AA7C11] transition"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </form>
+                  )}
                 </div>
               )}
 
@@ -579,17 +647,16 @@ export const ConsultationRoomPage: React.FC = () => {
                       rows={12}
                       value={lawyerNotes}
                       onChange={(e) => setLawyerNotes(e.target.value)}
-                      placeholder="Record statutory sections, legal opinions, next hearing dates..."
-                      className="mt-3 w-full rounded-2xl border border-[#262118] bg-[#121212] p-3 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none"
+                      placeholder="Record key advice, case precedents, next hearing/filing dates..."
+                      className="mt-2 w-full rounded-2xl border border-[#262118] bg-[#121212] p-3 text-xs text-[#F5E6C4] placeholder:text-[#A39E93] focus:border-[#D4AF37] focus:outline-none"
                     />
                   </div>
-
                   <button
                     onClick={handleSaveNotes}
                     disabled={isSavingNotes}
-                    className="mt-3 w-full rounded-xl bg-[#D4AF37] py-2.5 text-xs font-bold text-[#080808] hover:bg-[#AA7C11] disabled:opacity-50 transition"
+                    className="mt-3 w-full rounded-xl bg-[#D4AF37] py-2.5 text-xs font-bold text-[#080808] hover:bg-[#AA7C11] disabled:opacity-50"
                   >
-                    {isSavingNotes ? 'Saving...' : 'Save Private Notes'}
+                    {isSavingNotes ? 'Saving Notes...' : 'Save Consultation Notes'}
                   </button>
                 </div>
               )}

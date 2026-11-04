@@ -155,6 +155,22 @@ export const App: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/consultation/chat/:id"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'client', 'business', 'admin']}>
+            <ConsultationRoomPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/consultation/call/:id"
+        element={
+          <ProtectedRoute allowedRoles={['lawyer', 'client', 'business', 'admin']}>
+            <ConsultationRoomPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* JurisFlow Admin Portal */}
       <Route

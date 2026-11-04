@@ -775,3 +775,18 @@ CREATE TABLE IF NOT EXISTS announcements (
   priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('normal', 'important', 'urgent')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+
+-- 18. Astrotalk Consultation Requests (Request & Accept Flow)
+CREATE TABLE IF NOT EXISTS consultation_requests (
+  id VARCHAR(36) PRIMARY KEY,
+  client_id VARCHAR(36) NOT NULL,
+  advocate_id VARCHAR(36) NOT NULL,
+  mode VARCHAR(20) NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  duration_minutes INT DEFAULT 0,
+  rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
+  booking_id VARCHAR(36),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);

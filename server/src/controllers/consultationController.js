@@ -212,6 +212,81 @@ export const getConsultationById = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      // Check if id is a consultation_request id
+      const reqRes = await query(
+        `SELECT cr.*,
+                adv.name as lawyer_name, adv.avatar as lawyer_avatar, adv.id as lawyer_user_id,
+                cli.name as client_name, cli.email as client_email, cli.avatar as client_avatar,
+                lp.id as lawyer_id, lp.primary_specialty as lawyer_specialty
+         FROM consultation_requests cr
+         LEFT JOIN users adv ON cr.advocate_id = adv.id
+         LEFT JOIN users cli ON cr.client_id = cli.id
+         LEFT JOIN lawyer_profiles lp ON adv.id = lp.user_id OR cr.advocate_id = lp.id
+         WHERE cr.id = $1`,
+        [id]
+      );
+
+      if (reqRes.rows.length > 0) {
+        const reqItem = reqRes.rows[0];
+        if (reqItem.booking_id) {
+          const linkedRes = await query(
+            `SELECT
+              cb.*,
+              u_client.name as client_name,
+              u_client.email as client_email,
+              u_client.phone as client_phone,
+              u_client.avatar as client_avatar,
+              lp.full_name as lawyer_name,
+              lp.headline as lawyer_headline,
+              lp.primary_specialty as lawyer_specialty,
+              lp.bar_council_number as lawyer_bar_number,
+              lp.is_verified as lawyer_verified,
+              lp.rating_avg as lawyer_rating,
+              u_lawyer.avatar as lawyer_avatar,
+              u_lawyer.id as lawyer_user_id,
+              cr_rev.rating as client_rating,
+              cr_rev.review_text as client_review
+            FROM consultation_bookings cb
+            JOIN users u_client ON cb.client_id = u_client.id
+            JOIN lawyer_profiles lp ON cb.lawyer_id = lp.id
+            JOIN users u_lawyer ON lp.user_id = u_lawyer.id
+            LEFT JOIN client_reviews cr_rev ON cr_rev.booking_id = cb.id
+            WHERE cb.id = $1`,
+            [reqItem.booking_id]
+          );
+          if (linkedRes.rows.length > 0) {
+            return res.status(200).json({
+              success: true,
+              consultation: { ...linkedRes.rows[0], request_status: reqItem.status, request_id: reqItem.id },
+            });
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          consultation: {
+            id: reqItem.id,
+            request_id: reqItem.id,
+            booking_ref: `REQ-${reqItem.id.slice(0, 8)}`,
+            client_id: reqItem.client_id,
+            client_name: reqItem.client_name,
+            client_avatar: reqItem.client_avatar,
+            lawyer_id: reqItem.lawyer_id || reqItem.advocate_id,
+            lawyer_user_id: reqItem.lawyer_user_id || reqItem.advocate_id,
+            lawyer_name: reqItem.lawyer_name,
+            lawyer_avatar: reqItem.lawyer_avatar,
+            practice_area: reqItem.lawyer_specialty || 'General Consultation',
+            consultation_mode: reqItem.mode === 'call' ? 'audio' : 'chat',
+            duration_minutes: reqItem.duration_minutes || 15,
+            fee_amount: (parseFloat(reqItem.rate_per_min) || 25) * (reqItem.duration_minutes || 15),
+            status: reqItem.status,
+            request_status: reqItem.status,
+            meeting_room_id: `room_${reqItem.id}`,
+            created_at: reqItem.created_at,
+          },
+        });
+      }
+
       return res.status(404).json({ success: false, message: 'Consultation booking not found.' });
     }
 
@@ -670,5 +745,305 @@ export const endConsultationSession = async (req, res) => {
   } catch (error) {
     console.error('Error in endConsultationSession:', error);
     res.status(500).json({ success: false, message: 'Failed to record session completion.' });
+  }
+};
+
+
+/**
+ * Create Consultation Request (Astrotalk request pattern)
+ */
+export const createConsultationRequest = async (req, res) => {
+  try {
+    const clientId = req.user.id || req.user._id;
+    const { advocateId, mode = 'chat', durationMinutes = 15, ratePerMin } = req.body;
+
+    if (!advocateId) {
+      return res.status(400).json({ success: false, message: 'Advocate ID is required.' });
+    }
+
+    // Ensure table exists
+    await query(`
+      CREATE TABLE IF NOT EXISTS consultation_requests (
+        id VARCHAR(36) PRIMARY KEY,
+        client_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) NOT NULL,
+        mode VARCHAR(20) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        duration_minutes INT DEFAULT 0,
+        rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
+        booking_id VARCHAR(36),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // Fetch advocate details to get their exact rate and user_id
+    const advocateRes = await query(
+      `SELECT lp.id as profile_id, lp.user_id, lp.full_name, lp.consultation_fee_15
+       FROM lawyer_profiles lp
+       WHERE lp.id = $1 OR lp.user_id = $1`,
+      [advocateId]
+    );
+
+    let targetAdvocateId = advocateId;
+    let computedRate = ratePerMin ? parseFloat(ratePerMin) : 25.0;
+
+    if (advocateRes.rows.length > 0) {
+      const adv = advocateRes.rows[0];
+      targetAdvocateId = adv.user_id || adv.profile_id;
+      const fee15 = parseFloat(adv.consultation_fee_15) || 499;
+      if (!ratePerMin) {
+        computedRate = Math.max(15, Math.round(fee15 / 15));
+      }
+    }
+
+    const requestId = crypto.randomUUID();
+
+    await query(
+      `INSERT INTO consultation_requests (
+         id, client_id, advocate_id, mode, status, duration_minutes, rate_per_min, created_at, updated_at
+       ) VALUES ($1, $2, $3, 'pending', $4, $5, NOW(), NOW())`,
+      [requestId, clientId, targetAdvocateId, mode, durationMinutes, computedRate]
+    );
+
+    const result = await query(
+      `SELECT cr.*, u.name as advocate_name, u.avatar as advocate_avatar
+       FROM consultation_requests cr
+       LEFT JOIN users u ON cr.advocate_id = u.id
+       WHERE cr.id = $1`,
+      [requestId]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Consultation request sent successfully. Waiting for advocate acceptance.',
+      request: result.rows[0] || { id: requestId, status: 'pending', mode, rate_per_min: computedRate },
+    });
+  } catch (error) {
+    console.error('Error in createConsultationRequest:', error);
+    res.status(500).json({ success: false, message: 'Failed to create consultation request.' });
+  }
+};
+
+/**
+ * Get Single Consultation Request Status (for Client polling)
+ */
+export const getConsultationRequestStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT cr.*,
+              adv.name as advocate_name, adv.avatar as advocate_avatar,
+              cli.name as client_name, cli.avatar as client_avatar,
+              cb.meeting_room_id
+       FROM consultation_requests cr
+       LEFT JOIN users adv ON cr.advocate_id = adv.id
+       LEFT JOIN users cli ON cr.client_id = cli.id
+       LEFT JOIN consultation_bookings cb ON cr.booking_id = cb.id
+       WHERE cr.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Consultation request not found.' });
+    }
+
+    const request = result.rows[0];
+    res.status(200).json({
+      success: true,
+      request,
+      bookingId: request.booking_id || request.id,
+      isAccepted: request.status === 'accepted',
+      isDeclined: request.status === 'declined',
+      isPending: request.status === 'pending',
+    });
+  } catch (error) {
+    console.error('Error in getConsultationRequestStatus:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch request status.' });
+  }
+};
+
+/**
+ * Get Incoming Consultation Requests (for Advocate Dashboard polling)
+ */
+export const getIncomingConsultationRequests = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+
+    // Ensure table exists
+    await query(`
+      CREATE TABLE IF NOT EXISTS consultation_requests (
+        id VARCHAR(36) PRIMARY KEY,
+        client_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) NOT NULL,
+        mode VARCHAR(20) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        duration_minutes INT DEFAULT 0,
+        rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
+        booking_id VARCHAR(36),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    const lpRes = await query('SELECT id FROM lawyer_profiles WHERE user_id = $1', [userId]);
+    const lawyerProfileId = lpRes.rows[0]?.id;
+
+    const result = await query(
+      `SELECT cr.*,
+              cli.name as client_name, cli.email as client_email, cli.avatar as client_avatar
+       FROM consultation_requests cr
+       JOIN users cli ON cr.client_id = cli.id
+       WHERE (cr.advocate_id = $1 OR cr.advocate_id = $2)
+         AND cr.status = 'pending'
+       ORDER BY cr.created_at DESC`,
+      [userId, lawyerProfileId || userId]
+    );
+
+    res.status(200).json({
+      success: true,
+      requests: result.rows,
+    });
+  } catch (error) {
+    console.error('Error in getIncomingConsultationRequests:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch incoming requests.' });
+  }
+};
+
+/**
+ * Respond to Consultation Request (Advocate Accepts or Declines)
+ */
+export const respondToConsultationRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'accept' | 'decline'
+
+    if (!action || (action !== 'accept' && action !== 'decline')) {
+      return res.status(400).json({ success: false, message: "Action must be 'accept' or 'decline'." });
+    }
+
+    const reqRes = await query('SELECT * FROM consultation_requests WHERE id = $1', [id]);
+    if (reqRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Consultation request not found.' });
+    }
+
+    const request = reqRes.rows[0];
+
+    if (action === 'decline') {
+      await query(
+        `UPDATE consultation_requests SET status = 'declined', updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+      return res.status(200).json({
+        success: true,
+        message: 'Consultation request declined.',
+        status: 'declined',
+      });
+    }
+
+    // Action is 'accept'
+    let bookingId = request.booking_id;
+    if (!bookingId) {
+      bookingId = crypto.randomUUID();
+      const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const meetingRoomId = `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const durationMins = request.duration_minutes || 15;
+      const rate = parseFloat(request.rate_per_min) || 25;
+      const fee = rate * durationMins;
+
+      // Fetch advocate profile
+      const advRes = await query(
+        'SELECT id, user_id, primary_specialty, full_name FROM lawyer_profiles WHERE user_id = $1 OR id = $1',
+        [request.advocate_id]
+      );
+      const lawyer = advRes.rows[0] || {
+        id: request.advocate_id,
+        user_id: request.advocate_id,
+        primary_specialty: 'Legal Consultation',
+        full_name: 'Advocate',
+      };
+
+      // Insert confirmed consultation booking
+      await query(
+        `INSERT INTO consultation_bookings (
+           id, booking_ref, client_id, lawyer_id, practice_area, consultation_mode,
+           duration_minutes, scheduled_start, scheduled_end, fee_amount, currency,
+           payment_status, status, legal_issue_description, urgency, meeting_room_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '15 minutes', $8, 'INR', 'paid', 'confirmed', 'Instant Consultation Accepted', 'high', $9)`,
+        [
+          bookingId,
+          bookingRef,
+          request.client_id,
+          lawyer.id,
+          lawyer.primary_specialty,
+          request.mode === 'call' ? 'audio' : 'chat',
+          durationMins,
+          fee,
+          meetingRoomId,
+        ]
+      );
+
+      // Create linked conversation
+      const convId = crypto.randomUUID();
+      await query(
+        `INSERT INTO conversations (id, booking_id, client_id, lawyer_id) VALUES ($1, $2, $3, $4)`,
+        [convId, bookingId, request.client_id, lawyer.user_id]
+      );
+
+      // Initial message
+      const greeting = request.mode === 'chat'
+        ? `Consultation accepted! ${lawyer.full_name} is online and ready for consultation.`
+        : `Audio consultation accepted! Connecting live with ${lawyer.full_name}.`;
+
+      await query(
+        `INSERT INTO messages (id, conversation_id, booking_id, sender_id, recipient_id, content, message_type)
+         VALUES ($1, $2, $3, $4, $5, $6, 'text')`,
+        [crypto.randomUUID(), convId, bookingId, lawyer.user_id, request.client_id, greeting]
+      );
+
+      // Session log
+      await query(
+        `INSERT INTO consultation_session_logs (
+           id, booking_id, advocate_id, user_id, mode, fee_charged, status, started_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'started', NOW())`,
+        [crypto.randomUUID(), bookingId, lawyer.id, request.client_id, request.mode, fee]
+      );
+    }
+
+    // Update request
+    await query(
+      `UPDATE consultation_requests
+       SET status = 'accepted', booking_id = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [bookingId, id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Consultation request accepted. Session room is live.',
+      status: 'accepted',
+      bookingId,
+      requestId: id,
+    });
+  } catch (error) {
+    console.error('Error in respondToConsultationRequest:', error);
+    res.status(500).json({ success: false, message: 'Failed to respond to consultation request.' });
+  }
+};
+
+/**
+ * Cancel Consultation Request (by Client)
+ */
+export const cancelConsultationRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query(
+      `UPDATE consultation_requests SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    res.status(200).json({ success: true, message: 'Consultation request cancelled.' });
+  } catch (error) {
+    console.error('Error in cancelConsultationRequest:', error);
+    res.status(500).json({ success: false, message: 'Failed to cancel consultation request.' });
   }
 };

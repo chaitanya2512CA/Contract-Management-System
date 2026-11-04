@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { Badge } from '../common/Badge';
+import { IncomingConsultationModal } from '../consultation/IncomingConsultationModal';
 
 export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar }) => {
   const { user, role, isAuthenticated, logout, login } = useAuth();
@@ -404,6 +405,7 @@ export const Navbar: React.FC<{ toggleSidebar?: () => void }> = ({ toggleSidebar
           )}
         </div>
       )}
+      <IncomingConsultationModal />
     </header>
   );
 };
