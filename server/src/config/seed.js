@@ -47,19 +47,41 @@ export const ensureDemoAccounts = async () => {
 
   // Helper to get or insert user
   const ensureUser = async ({ id, name, email, password, role, phone, company, city, state, avatar, bio }) => {
-    const existing = await query('SELECT id, password_hash FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (existing.rows.length > 0) {
-      return existing.rows[0].id;
-    }
-    const userId = id || crypto.randomUUID();
+    const cleanEmail = email.toLowerCase().trim();
     const hash = password ? await bcrypt.hash(password, salt) : hashedDefault;
+    const existing = await query('SELECT id, password_hash FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+
+    if (existing.rows.length > 0) {
+      const existingId = existing.rows[0].id;
+      await query(
+        `UPDATE users
+         SET password_hash = $1, role = $2, is_active = true,
+             name = COALESCE(NULLIF(name, ''), $3),
+             full_name = COALESCE(NULLIF(full_name, ''), $3),
+             updated_at = NOW()
+         WHERE id = $4`,
+        [hash, role, name, existingId]
+      );
+      try {
+        await query(
+          `UPDATE profiles
+           SET full_name = COALESCE(NULLIF(full_name, ''), $1), role = $2, is_active = true, updated_at = NOW()
+           WHERE LOWER(email) = $3`,
+          [name, role, cleanEmail]
+        );
+      } catch (_) {}
+      return existingId;
+    }
+
+    const userId = id || crypto.randomUUID();
     await query(
-      `INSERT INTO users (id, name, email, password_hash, role, phone, company_name, city, state, avatar, bio, is_active, last_login, last_login_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, NOW(), NOW(), NOW(), NOW())`,
+      `INSERT INTO users (id, name, full_name, email, password_hash, role, phone, company_name, city, state, avatar, bio, is_active, last_login, last_login_at, created_at, updated_at)
+       VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, NOW(), NOW(), NOW(), NOW())
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role, is_active = true`,
       [
         userId,
         name,
-        email.toLowerCase(),
+        cleanEmail,
         hash,
         role,
         phone || '+91 98765 43210',
@@ -73,10 +95,10 @@ export const ensureDemoAccounts = async () => {
 
     try {
       await query(
-        `INSERT INTO profiles (id, email, full_name, role, phone, company_name, city, state, bio, is_active, last_login, last_login_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW(), NOW())
-         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`,
-        [userId, email.toLowerCase(), name, role, phone || '+91 98765 43210', company || '', city || 'New Delhi', state || 'Delhi', bio || '']
+        `INSERT INTO profiles (id, email, full_name, name, role, phone, company_name, city, state, bio, is_active, last_login, last_login_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, true, NOW(), NOW(), NOW(), NOW())
+         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, is_active = true`,
+        [userId, cleanEmail, name, role, phone || '+91 98765 43210', company || '', city || 'New Delhi', state || 'Delhi', bio || '']
       );
     } catch (_) {}
 

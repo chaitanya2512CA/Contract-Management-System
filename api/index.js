@@ -101,17 +101,10 @@ async function initializeApp() {
   }
 
   try {
-    const userCheck = await query('SELECT 1 FROM users LIMIT 1');
-    if (!userCheck || !userCheck.rows || userCheck.rows.length === 0) {
-      await ensureDemoAccounts();
-    }
-  } catch (_) {
-    // If table check fails, try seed once
-    try {
-      await ensureDemoAccounts();
-    } catch (seedErr) {
-      console.warn('[Vercel Serverless] Seed notice:', seedErr.message);
-    }
+    await ensureDemoAccounts();
+    console.log('[Vercel Serverless] Ensured JurisFlow system and demo accounts exist.');
+  } catch (seedErr) {
+    console.warn('[Vercel Serverless] Seed notice:', seedErr.message);
   }
   isInitialized = true;
   console.log('[Vercel Serverless] Database connected and ready.');
