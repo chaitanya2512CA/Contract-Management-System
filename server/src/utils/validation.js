@@ -55,7 +55,7 @@ export const validateEmail = (email) => {
     return { isValid: false, message: 'Email address cannot exceed 254 characters.' };
   }
   if (!EMAIL_PATTERN.test(trimmed)) {
-    return { isValid: false, message: 'Please enter a valid college email address.' };
+    return { isValid: false, message: 'Please enter a valid email address.' };
   }
   return { isValid: true, value: trimmed.toLowerCase() };
 };
