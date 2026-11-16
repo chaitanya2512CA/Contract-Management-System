@@ -296,6 +296,8 @@ export const initSchema = async () => {
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(6);`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expires TIMESTAMPTZ;`,
       `UPDATE users SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL;`,
       `UPDATE users SET name = full_name WHERE name IS NULL AND full_name IS NOT NULL;`,
 
@@ -357,6 +359,8 @@ export const initSchema = async () => {
       `ALTER TABLE advocates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(6);`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expires TIMESTAMPTZ;`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
       `CREATE TABLE IF NOT EXISTS admin_logs (

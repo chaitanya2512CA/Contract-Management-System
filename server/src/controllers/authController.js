@@ -9,6 +9,7 @@ import {
   validatePhone,
   validateText,
 } from '../utils/validation.js';
+import { sendWelcomeEmail, sendOtpEmail } from '../utils/email.js';
 
 // Helper to sign JWT token
 const signToken = (id, role) => {
@@ -57,7 +58,8 @@ export const getUsersColumns = async () => {
   return usersColumnsCache || new Set([
     'id', 'name', 'full_name', 'email', 'password_hash', 'role', 'phone', 'company_name',
     'city', 'state', 'bio', 'is_active', 'last_login', 'last_login_at', 'created_at', 'updated_at',
-    'bar_registration_number', 'bar_council_number', 'experience_years', 'primary_specialty'
+    'bar_registration_number', 'bar_council_number', 'experience_years', 'primary_specialty',
+    'reset_otp', 'reset_otp_expires'
   ]);
 };
 
@@ -73,6 +75,8 @@ export const ensureLastLoginAtMigration = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(6);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expires TIMESTAMP WITH TIME ZONE;
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS name VARCHAR(150);
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
@@ -1223,6 +1227,12 @@ export const register = async (req, res) => {
       registeredUser.lawyerProfile = lawyerProfile;
     }
 
+    try {
+      await sendWelcomeEmail(cleanEmail, displayName);
+    } catch (emailErr) {
+      console.error('[EMAIL] Failed to send welcome email:', emailErr.message);
+    }
+
     return sendAuthResponse(registeredUser, 201, res, 'Account registered successfully.');
   } catch (error) {
     console.error('[AUTH] DB Insert Error:', error);
@@ -1397,7 +1407,7 @@ export const changePassword = async (req, res) => {
 };
 
 /**
- * Forgot Password
+ * Forgot Password - Generates & sends 6-digit OTP via Email
  */
 export const forgotPassword = async (req, res) => {
   try {
@@ -1407,7 +1417,8 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: emailCheck.message });
     }
 
-    const userRes = await query('SELECT name FROM users WHERE LOWER(email) = $1', [emailCheck.value]);
+    const cleanEmail = emailCheck.value.toLowerCase();
+    const userRes = await query('SELECT id, name, full_name, email FROM users WHERE LOWER(email) = $1', [cleanEmail]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -1415,12 +1426,114 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    const user = userRes.rows[0];
+    const recipientName = user.full_name || user.name || 'Valued Member';
+
+    // Generate secure 6-digit OTP
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    // Ensure OTP columns exist and store OTP with 10-minute validity
+    await query(
+      `UPDATE users SET reset_otp = $1, reset_otp_expires = NOW() + INTERVAL '10 minutes' WHERE LOWER(email) = $2`,
+      [otp, cleanEmail]
+    );
+
+    // Send OTP email (must await for serverless environments)
+    const emailResult = await sendOtpEmail(cleanEmail, otp, recipientName);
+    if (!emailResult.success && !emailResult.skipped) {
+      console.warn(`[AUTH] Failed to send OTP email to ${cleanEmail}:`, emailResult.error);
+    }
+
+    return res.status(200).json({
       success: true,
-      message: `Account found for ${userRes.rows[0].name}. Please sign in using your configured credentials.`,
+      message: `Password reset verification code sent to ${cleanEmail}. Valid for 10 minutes.`,
     });
   } catch (error) {
-    console.error('Auth DB Error:', error);
-    res.status(500).json({ success: false, message: 'Error processing password reset request.' });
+    console.error('[AUTH] Forgot Password Error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error processing password reset request.' });
+  }
+};
+
+/**
+ * Reset Password - Verifies 6-digit OTP and updates password
+ */
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword, password } = req.body;
+    const chosenPassword = newPassword || password;
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ success: false, message: emailCheck.message });
+    }
+
+    if (!otp || typeof otp !== 'string' || otp.trim().length !== 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide the 6-digit verification code sent to your email.',
+      });
+    }
+
+    const pwdCheck = validatePassword(chosenPassword, true);
+    if (!pwdCheck.isValid) {
+      return res.status(400).json({ success: false, message: pwdCheck.message });
+    }
+
+    const cleanEmail = emailCheck.value.toLowerCase();
+    const cleanOtp = otp.trim();
+
+    // Retrieve user and check OTP and expiry
+    const userRes = await query(
+      `SELECT id, email, reset_otp, reset_otp_expires FROM users WHERE LOWER(email) = $1`,
+      [cleanEmail]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No registered account found with this email address.',
+      });
+    }
+
+    const user = userRes.rows[0];
+
+    if (!user.reset_otp || user.reset_otp !== cleanOtp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification code. Please check your email and try again.',
+      });
+    }
+
+    if (!user.reset_otp_expires || new Date(user.reset_otp_expires) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code has expired. Please request a new code.',
+      });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(chosenPassword, 10);
+
+    // Update password and clear OTP
+    await query(
+      `UPDATE users SET password_hash = $1, reset_otp = NULL, reset_otp_expires = NULL, updated_at = NOW() WHERE LOWER(email) = $2`,
+      [passwordHash, cleanEmail]
+    );
+
+    // Update profiles and advocates tables if present
+    try {
+      await query(`UPDATE profiles SET updated_at = NOW() WHERE LOWER(email) = $1`, [cleanEmail]);
+    } catch (_) {}
+    try {
+      await query(`UPDATE advocates SET password_hash = $1, updated_at = NOW() WHERE LOWER(email) = $2`, [passwordHash, cleanEmail]);
+    } catch (_) {}
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You may now sign in with your new credentials.',
+    });
+  } catch (error) {
+    console.error('[AUTH] Reset Password Error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error resetting password.' });
   }
 };

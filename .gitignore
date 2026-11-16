@@ -24,6 +24,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+scratch/
+scripts/
+server/public/uploads/
 
 # Editor & OS files
 .DS_Store

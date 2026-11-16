@@ -144,7 +144,12 @@ export const UniversalLoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-[#A39E93]">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[#A39E93]">Password</label>
+                <Link to="/forgot-password" className="text-[11px] font-semibold text-[#D4AF37] hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative mt-1">
                 <Lock className="absolute left-3.5 top-3.5 h-4 w-4 text-[#A39E93]" />
                 <input

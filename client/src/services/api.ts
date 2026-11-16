@@ -71,6 +71,8 @@ export const authService = {
   changePassword: (data: any) => api.put('/auth/change-password', data),
 
     forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+    resetPassword: (data: { email: string; otp: string; newPassword?: string; password?: string }) =>
+      api.post('/auth/reset-password', data),
 };
 
 /* ================= JURISFLOW LAWYER API ================= */

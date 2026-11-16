@@ -11,6 +11,7 @@ import {
   updateProfile,
   changePassword,
   forgotPassword,
+  resetPassword,
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
@@ -32,6 +33,7 @@ router.post('/organizer/register', authLimiter, registerOrganizer);
 router.post('/organizer/login', authLimiter, loginOrganizer);
 
 router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPassword);
 
 // Protected User Profile Endpoints
 router.get('/me', protect, getMe);
