@@ -281,7 +281,19 @@ export const registerStudent = async (req, res) => {
     }
 
     const user = mapUser(insertRes.rows[0]);
-    sendAuthResponse(user, 201, res, 'Student account registered successfully.');
+    try {
+      console.log(`[AUTH] Dispatching welcome email to student ${emailCheck.value}...`);
+      const emailResult = await sendWelcomeEmail(emailCheck.value, nameCheck.value);
+      console.log(`[AUTH] Student welcome email result for ${emailCheck.value}:`, emailResult);
+    } catch (emailErr) {
+      console.error('[AUTH / EMAIL Error] Failed to send student welcome email:', {
+        message: emailErr.message,
+        code: emailErr.code,
+        response: emailErr.response,
+        stack: emailErr.stack,
+      });
+    }
+    return sendAuthResponse(user, 201, res, 'Student account registered successfully.');
   } catch (error) {
     console.error('Auth DB Error:', error);
     if (error.code === '23505') {
@@ -430,7 +442,19 @@ export const registerOrganizer = async (req, res) => {
     }
 
     const user = mapUser(insertRes.rows[0]);
-    sendAuthResponse(user, 201, res, 'Organizer account registered successfully.');
+    try {
+      console.log(`[AUTH] Dispatching welcome email to organizer ${emailCheck.value}...`);
+      const emailResult = await sendWelcomeEmail(emailCheck.value, nameCheck.value);
+      console.log(`[AUTH] Organizer welcome email result for ${emailCheck.value}:`, emailResult);
+    } catch (emailErr) {
+      console.error('[AUTH / EMAIL Error] Failed to send organizer welcome email:', {
+        message: emailErr.message,
+        code: emailErr.code,
+        response: emailErr.response,
+        stack: emailErr.stack,
+      });
+    }
+    return sendAuthResponse(user, 201, res, 'Organizer account registered successfully.');
   } catch (error) {
     console.error('Auth DB Error:', error);
     if (error.code === '23505') {
@@ -1228,9 +1252,17 @@ export const register = async (req, res) => {
     }
 
     try {
-      await sendWelcomeEmail(cleanEmail, displayName);
+      console.log(`[AUTH] Dispatching welcome email to ${cleanEmail}...`);
+      const emailResult = await sendWelcomeEmail(cleanEmail, displayName);
+      console.log(`[AUTH] Welcome email result for ${cleanEmail}:`, emailResult);
     } catch (emailErr) {
-      console.error('[EMAIL] Failed to send welcome email:', emailErr.message);
+      console.error('[AUTH / EMAIL Error] Failed to send welcome email:', {
+        message: emailErr.message,
+        code: emailErr.code,
+        response: emailErr.response,
+        command: emailErr.command,
+        stack: emailErr.stack,
+      });
     }
 
     return sendAuthResponse(registeredUser, 201, res, 'Account registered successfully.');
@@ -1438,10 +1470,24 @@ export const forgotPassword = async (req, res) => {
       [otp, cleanEmail]
     );
 
-    // Send OTP email (must await for serverless environments)
-    const emailResult = await sendOtpEmail(cleanEmail, otp, recipientName);
-    if (!emailResult.success && !emailResult.skipped) {
-      console.warn(`[AUTH] Failed to send OTP email to ${cleanEmail}:`, emailResult.error);
+    // Send OTP email (must await for serverless environments BEFORE sending response)
+    let emailResult = null;
+    try {
+      console.log(`[AUTH] Dispatching OTP email to ${cleanEmail}...`);
+      emailResult = await sendOtpEmail(cleanEmail, otp, recipientName);
+      console.log(`[AUTH] OTP email dispatch result for ${cleanEmail}:`, emailResult);
+    } catch (otpErr) {
+      console.error(`[AUTH / EMAIL Error] Failed to dispatch OTP email to ${cleanEmail}:`, {
+        message: otpErr.message,
+        code: otpErr.code,
+        response: otpErr.response,
+        command: otpErr.command,
+        stack: otpErr.stack,
+      });
+    }
+
+    if (emailResult && !emailResult.success && !emailResult.skipped) {
+      console.error(`[AUTH / EMAIL Error] OTP sendMail returned failure for ${cleanEmail}:`, emailResult);
     }
 
     return res.status(200).json({

@@ -16,11 +16,11 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 let transporterInstance = null;
 
 /**
- * Returns a configured Nodemailer transporter using Gmail SMTP
+ * Creates a fresh Nodemailer transporter instance with strict trim on credentials
  */
-export const getTransporter = () => {
+export const createFreshTransporter = (options = {}) => {
   const user = (process.env.EMAIL_USER || '').trim();
-  const pass = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+  const pass = (process.env.EMAIL_PASS || '').trim().replace(/\s+/g, '');
 
   if (
     !user ||
@@ -31,21 +31,36 @@ export const getTransporter = () => {
     return null;
   }
 
-  if (!transporterInstance) {
-    transporterInstance = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // TLS via STARTTLS (port 587)
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-  }
+  // Standard Gmail SMTP port 465 (SSL) by default, or port 587 (TLS) if specified
+  const port = options.port !== undefined
+    ? options.port
+    : (process.env.EMAIL_PORT ? parseInt(process.env.EMAIL_PORT, 10) : 465);
+  const secure = options.secure !== undefined
+    ? options.secure
+    : (port === 465);
 
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: port,
+    secure: secure,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+};
+
+/**
+ * Returns a configured Nodemailer transporter using Gmail SMTP.
+ * In serverless environments, forceFresh=true ensures a new connection is created.
+ */
+export const getTransporter = (forceFresh = true) => {
+  if (forceFresh || !transporterInstance) {
+    transporterInstance = createFreshTransporter();
+  }
   return transporterInstance;
 };
 
@@ -73,10 +88,11 @@ export const resolveAppUrl = () => {
  */
 export const sendWelcomeEmail = async (toEmail, userName = 'Valued Member') => {
   try {
-    const transporter = getTransporter();
+    const transporter = getTransporter(true);
     const appUrl = resolveAppUrl();
-    const fromAddress = process.env.EMAIL_USER
-      ? `"JurisFlow" <${process.env.EMAIL_USER}>`
+    const cleanUser = (process.env.EMAIL_USER || '').trim();
+    const fromAddress = cleanUser
+      ? `"JurisFlow" <${cleanUser}>`
       : '"JurisFlow" <no-reply@jurisflow.com>';
 
     if (!transporter) {
@@ -196,9 +212,15 @@ Launch your workspace: ${appUrl}/login
     console.log(`[Email Service SMTP Response] Accepted: ${JSON.stringify(info.accepted)}, Response: "${info.response}"`);
     return { success: true, messageId: info.messageId, response: info.response, envelope: info.envelope };
   } catch (error) {
-    console.error(`[Email Service Error] Failed to send welcome email to ${toEmail}:`, error.message);
-    if (error.response) console.error(`[Email Service SMTP Error Response]:`, error.response);
-    return { success: false, error: error.message };
+    console.error(`[Email Service Error] Failed to send welcome email to ${toEmail}:`, {
+      message: error.message,
+      code: error.code,
+      response: error.response,
+      command: error.command,
+      responseCode: error.responseCode,
+      stack: error.stack,
+    });
+    return { success: false, error: error.message, code: error.code, response: error.response };
   }
 };
 
@@ -210,11 +232,12 @@ Launch your workspace: ${appUrl}/login
  * @param {string|number} otp - 6-digit verification code
  * @returns {Promise<{success: boolean, messageId?: string, skipped?: boolean, error?: string}>}
  */
-export const sendOtpEmail = async (toEmail, otp) => {
+export const sendOtpEmail = async (toEmail, otp, recipientName = 'Valued Member') => {
   try {
-    const transporter = getTransporter();
-    const fromAddress = process.env.EMAIL_USER
-      ? `"JurisFlow Security" <${process.env.EMAIL_USER}>`
+    const transporter = getTransporter(true);
+    const cleanUser = (process.env.EMAIL_USER || '').trim();
+    const fromAddress = cleanUser
+      ? `"JurisFlow Security" <${cleanUser}>`
       : '"JurisFlow Security" <no-reply@jurisflow.com>';
 
     if (!transporter) {
@@ -324,9 +347,15 @@ If you did not request this password reset, please ignore this email. Your accou
     console.log(`[Email Service SMTP Response] Accepted: ${JSON.stringify(info.accepted)}, Response: "${info.response}"`);
     return { success: true, messageId: info.messageId, response: info.response, envelope: info.envelope };
   } catch (error) {
-    console.error(`[Email Service Error] Failed to send OTP email to ${toEmail}:`, error.message);
-    if (error.response) console.error(`[Email Service SMTP Error Response]:`, error.response);
-    return { success: false, error: error.message };
+    console.error(`[Email Service Error] Failed to send OTP email to ${toEmail}:`, {
+      message: error.message,
+      code: error.code,
+      response: error.response,
+      command: error.command,
+      responseCode: error.responseCode,
+      stack: error.stack,
+    });
+    return { success: false, error: error.message, code: error.code, response: error.response };
   }
 };
 
@@ -344,7 +373,9 @@ function escapeHtml(string) {
 }
 
 export default {
+  createFreshTransporter,
   getTransporter,
   sendWelcomeEmail,
   sendOtpEmail,
+  resolveAppUrl,
 };
