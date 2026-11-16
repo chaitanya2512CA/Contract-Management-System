@@ -19,7 +19,13 @@ let transporterInstance = null;
  * Creates a fresh Nodemailer transporter instance with strict trim on credentials
  */
 export const createFreshTransporter = (options = {}) => {
-  const user = (process.env.EMAIL_USER || '').trim();
+  let user = (process.env.EMAIL_USER || '').trim();
+  // Sanitize common domain typos (e.g. @gamil.com -> @gmail.com)
+  if (/@gamil\.com$/i.test(user)) {
+    console.warn(`[Email Service Warning] Auto-correcting typo in EMAIL_USER: ${user} -> ${user.replace(/@gamil\.com$/i, '@gmail.com')}`);
+    user = user.replace(/@gamil\.com$/i, '@gmail.com');
+  }
+
   const pass = (process.env.EMAIL_PASS || '').trim().replace(/\s+/g, '');
 
   if (
@@ -90,7 +96,10 @@ export const sendWelcomeEmail = async (toEmail, userName = 'Valued Member') => {
   try {
     const transporter = getTransporter(true);
     const appUrl = resolveAppUrl();
-    const cleanUser = (process.env.EMAIL_USER || '').trim();
+    let cleanUser = (process.env.EMAIL_USER || '').trim();
+    if (/@gamil\.com$/i.test(cleanUser)) {
+      cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+    }
     const fromAddress = cleanUser
       ? `"JurisFlow" <${cleanUser}>`
       : '"JurisFlow" <no-reply@jurisflow.com>';
@@ -235,7 +244,10 @@ Launch your workspace: ${appUrl}/login
 export const sendOtpEmail = async (toEmail, otp, recipientName = 'Valued Member') => {
   try {
     const transporter = getTransporter(true);
-    const cleanUser = (process.env.EMAIL_USER || '').trim();
+    let cleanUser = (process.env.EMAIL_USER || '').trim();
+    if (/@gamil\.com$/i.test(cleanUser)) {
+      cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+    }
     const fromAddress = cleanUser
       ? `"JurisFlow Security" <${cleanUser}>`
       : '"JurisFlow Security" <no-reply@jurisflow.com>';

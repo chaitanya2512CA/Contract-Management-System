@@ -84,7 +84,10 @@ app.get(['/api/test-email', '/test-email'], async (req, res) => {
   const reqPort = req.query.port ? parseInt(req.query.port, 10) : undefined;
 
   const rawUser = process.env.EMAIL_USER || '';
-  const cleanUser = rawUser.trim();
+  let cleanUser = rawUser.trim();
+  if (/@gamil\.com$/i.test(cleanUser)) {
+    cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+  }
   const rawPass = process.env.EMAIL_PASS || '';
   const cleanPass = rawPass.trim().replace(/\s+/g, '');
 
