@@ -118,6 +118,7 @@ export const handleAuthError = (res, error, operation = 'Authentication') => {
     routine: error.routine,
     message: error.message,
     name: error.name,
+    stack: error.stack,
   });
 
   if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('already exists')) {
@@ -137,12 +138,15 @@ export const handleAuthError = (res, error, operation = 'Authentication') => {
     return res.status(503).json({
       success: false,
       message: 'Database connection error. Please check database connectivity.',
+      detail: error.message,
     });
   }
 
   return res.status(500).json({
     success: false,
     message: error.message || `${operation} failed. Please try again.`,
+    errorType: error.name,
+    errorCode: error.code || null,
   });
 };
 

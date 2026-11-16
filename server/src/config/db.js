@@ -1,4 +1,3 @@
-import { Pool as NeonPool } from '@neondatabase/serverless';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -509,24 +508,8 @@ export const connectDB = async () => {
       const isNeonHost = parsed.host && parsed.host.includes('neon.tech');
       let newPool;
 
-      if (isNeonHost) {
-        console.log('[DB] Connecting to Neon PostgreSQL using connection pool with strict TLS verification...');
-        try {
-          newPool = new Pool(poolConfig);
-          const client = await newPool.connect();
-          await client.query('SELECT 1');
-          client.release();
-        } catch (poolErr) {
-          console.warn('[DB] Neon TCP pool notice, falling back to WebSocket pooler:', poolErr.message);
-          newPool = new NeonPool({
-            connectionString: connStr,
-            max: isVercel ? 2 : 10,
-            connectionTimeoutMillis: 10000,
-          });
-        }
-      } else {
-        newPool = new Pool(poolConfig);
-      }
+      console.log(`[DB] Connecting to PostgreSQL (${isNeonHost ? 'Neon TLS' : 'Standard'})...`);
+      newPool = new Pool(poolConfig);
 
       newPool.on('error', (err) => {
         console.warn('[DB Background Pool Notice]:', err.message);
