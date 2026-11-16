@@ -15,6 +15,7 @@ import { legalServicesService, paymentService } from '../../services/api';
 import { LegalService } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/common/Badge';
+import { UpiPaymentModal } from '../../components/payment/UpiPaymentModal';
 
 export const LegalServicesPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -29,6 +30,8 @@ export const LegalServicesPage: React.FC = () => {
   const [selectedService, setSelectedService] = useState<LegalService | null>(null);
   const [requirements, setRequirements] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isUpiModalOpen, setIsUpiModalOpen] = useState<boolean>(false);
+  const [pendingOrderService, setPendingOrderService] = useState<{ service: LegalService; requestId?: string } | null>(null);
 
   const fetchServices = async () => {
     try {
@@ -61,14 +64,19 @@ export const LegalServicesPage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      await legalServicesService.request(selectedService.id, {
+      const res = await legalServicesService.request(selectedService.id, {
         requirements: requirements.trim(),
       });
 
-      alert('Legal service ordered successfully! Your advocate will initiate drafting immediately.');
+      const svc = selectedService;
+      const createdReq = res.data?.request || res.data?.serviceRequest;
+      setPendingOrderService({
+        service: svc,
+        requestId: createdReq?.id,
+      });
       setSelectedService(null);
       setRequirements('');
-      navigate('/client/dashboard');
+      setIsUpiModalOpen(true);
     } catch (err) {
       console.error('Failed to order service:', err);
     } finally {
@@ -229,6 +237,27 @@ export const LegalServicesPage: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Direct UPI Payment Modal for Service Order */}
+      {pendingOrderService && (
+        <UpiPaymentModal
+          isOpen={isUpiModalOpen}
+          onClose={() => {
+            setIsUpiModalOpen(false);
+            setPendingOrderService(null);
+            navigate('/client/dashboard');
+          }}
+          amount={Number(pendingOrderService.service.price_amount || 0)}
+          serviceRequestId={pendingOrderService.requestId}
+          purpose={`Order: ${pendingOrderService.service.title}`}
+          onSuccess={() => {
+            alert('UPI payment submitted! Your advocate has been notified to start drafting.');
+            setIsUpiModalOpen(false);
+            setPendingOrderService(null);
+            navigate('/client/dashboard');
+          }}
+        />
       )}
     </div>
   );

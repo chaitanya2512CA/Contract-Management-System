@@ -14,10 +14,12 @@ import {
   Zap,
   Radio,
   Loader2,
+  QrCode,
 } from 'lucide-react';
 import { LawyerProfile } from '../../types';
 import { consultationService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { UpiPaymentModal } from '../payment/UpiPaymentModal';
 
 interface AstrotalkPreConsultationModalProps {
   lawyer: LawyerProfile;
@@ -40,6 +42,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
   const [legalDescription, setLegalDescription] = useState<string>('Immediate Legal Advice & Consultation');
   const [walletBalance, setWalletBalance] = useState<number>(1500);
   const [showWalletRecharged, setShowWalletRecharged] = useState<boolean>(false);
+  const [isUpiModalOpen, setIsUpiModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,7 +440,7 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               </div>
             </div>
 
-            {/* Astrotalk Wallet Balance Bar */}
+            {/* Astrotalk Wallet Balance & Direct UPI Bar */}
             <div className="mt-4 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-3.5 text-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -448,20 +451,31 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleRechargeWallet}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[#D4AF37] px-3 py-1 text-[11px] font-bold text-[#080808] shadow-sm hover:bg-[#AA7C11] transition"
-                >
-                  <PlusCircle className="h-3 w-3" />
-                  <span>Add ₹1,000</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsUpiModalOpen(true)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#D4AF37]/50 bg-[#121212] px-2.5 py-1 text-[11px] font-bold text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#080808] transition shadow-sm"
+                  >
+                    <QrCode className="h-3 w-3" />
+                    <span>Pay with UPI</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRechargeWallet}
+                    className="inline-flex items-center gap-1 rounded-xl bg-[#D4AF37] px-2.5 py-1 text-[11px] font-bold text-[#080808] shadow-sm hover:bg-[#AA7C11] transition"
+                  >
+                    <PlusCircle className="h-3 w-3" />
+                    <span>+₹1,000</span>
+                  </button>
+                </div>
               </div>
 
               <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#A39E93]">
                 <span>Talktime Available: ~{maxMinsAvailable} mins</span>
                 {showWalletRecharged && (
-                  <span className="font-bold text-[#10B981] animate-pulse">✓ ₹1,000 added to wallet!</span>
+                  <span className="font-bold text-[#10B981] animate-pulse">✓ Wallet updated!</span>
                 )}
               </div>
             </div>
@@ -541,6 +555,20 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
           </>
         )}
       </div>
+
+      {/* Embedded Direct UPI Payment Modal */}
+      <UpiPaymentModal
+        isOpen={isUpiModalOpen}
+        onClose={() => setIsUpiModalOpen(false)}
+        amount={sessionFee}
+        advocateId={lawyer.id}
+        advocateName={lawyer.full_name}
+        purpose={`Legal Consultation with Adv. ${lawyer.full_name}`}
+        onSuccess={(payment) => {
+          setWalletBalance((prev) => prev + Number(payment.amount));
+          setShowWalletRecharged(true);
+        }}
+      />
     </div>
   );
 };

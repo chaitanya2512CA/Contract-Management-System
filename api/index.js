@@ -64,6 +64,22 @@ async function initializeApp() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS upi_payments (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) DEFAULT NULL,
+        amount NUMERIC(10, 2) NOT NULL,
+        utr_number VARCHAR(20) UNIQUE NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
+        notes TEXT DEFAULT '',
+        consultation_id VARCHAR(36) DEFAULT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        verified_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_upi_payments_utr ON upi_payments(utr_number);
+      CREATE INDEX IF NOT EXISTS idx_upi_payments_status ON upi_payments(status);
+      CREATE INDEX IF NOT EXISTS idx_upi_payments_user ON upi_payments(user_id);
     `);
     console.log('[Vercel Serverless] Ensured schema columns and tables exist in database.');
   } catch (migErr) {

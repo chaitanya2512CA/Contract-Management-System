@@ -153,6 +153,21 @@ export const paymentService = {
   createOrder: (data: any) => api.post('/payments/orders', data),
   verify: (data: any) => api.post('/payments/verify', data),
   testCheckout: (bookingId: string) => api.post('/payments/test-checkout', { bookingId }),
+
+  // Direct UPI Payment Services (No Gateway)
+  submitUpi: (data: {
+    userId?: string;
+    advocateId?: string;
+    amount: number;
+    utrNumber: string;
+    consultationId?: string;
+    serviceRequestId?: string;
+    notes?: string;
+  }) => api.post('/payments/upi-submit', data),
+  getPendingUpi: () => api.get('/payments/pending'),
+  getAllUpi: (params?: { status?: string; search?: string }) => api.get('/payments/upi-list', { params }),
+  verifyUpi: (id: string, data: { status: 'verified' | 'rejected'; notes?: string }) =>
+    api.patch(`/payments/${id}/verify`, data),
 };
 
 /* ================= FINANCIALS & PAYOUTS API ================= */

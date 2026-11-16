@@ -14,11 +14,13 @@ import {
   AlertCircle,
   Sparkles,
   Search,
+  QrCode,
 } from 'lucide-react';
 import { consultationService, contractService, caseService } from '../../services/api';
 import { ConsultationBooking, Contract, LegalCase } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/common/Badge';
+import { UpiPaymentModal } from '../../components/payment/UpiPaymentModal';
 
 export const ClientDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -28,6 +30,7 @@ export const ClientDashboard: React.FC = () => {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [cases, setCases] = useState<LegalCase[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isUpiModalOpen, setIsUpiModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -71,6 +74,14 @@ export const ClientDashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsUpiModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-gradient-to-r from-amber-50 to-amber-100/50 px-4 py-2.5 text-xs font-bold text-amber-950 shadow-sm hover:from-amber-100 hover:to-amber-200 transition dark:border-amber-700/60 dark:bg-gradient-to-r dark:from-amber-950/40 dark:to-amber-900/20 dark:text-amber-200"
+            >
+              <QrCode className="h-4 w-4 text-[#D4AF37]" />
+              <span>Direct UPI Payment</span>
+            </button>
+
             <Link
               to="/lawyers"
               className="flex items-center gap-1.5 rounded-2xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 dark:shadow-none"
@@ -307,6 +318,18 @@ export const ClientDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Direct UPI Payment Modal */}
+      <UpiPaymentModal
+        isOpen={isUpiModalOpen}
+        onClose={() => setIsUpiModalOpen(false)}
+        amount={1000}
+        purpose="JurisFlow Legal Retainer / Direct Payment"
+        onSuccess={() => {
+          setIsUpiModalOpen(false);
+          alert('UPI Payment details submitted! Once verified by our finance desk, your confirmation receipt will be sent via email.');
+        }}
+      />
     </div>
   );
 };

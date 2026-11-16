@@ -310,6 +310,21 @@ export const initSchema = async () => {
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_specialty VARCHAR(100) DEFAULT 'Contract Lawyer';`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `CREATE TABLE IF NOT EXISTS upi_payments (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) DEFAULT NULL,
+        amount NUMERIC(10, 2) NOT NULL,
+        utr_number VARCHAR(20) UNIQUE NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
+        notes TEXT DEFAULT '',
+        consultation_id VARCHAR(36) DEFAULT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        verified_at TIMESTAMPTZ DEFAULT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_utr ON upi_payments(utr_number);`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_status ON upi_payments(status);`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_user ON upi_payments(user_id);`,
 
       `ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';`,
       `ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS bar_council_number VARCHAR(100) DEFAULT '';`,
@@ -363,6 +378,21 @@ export const initSchema = async () => {
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expires TIMESTAMPTZ;`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();`,
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ DEFAULT NOW();`,
+      `CREATE TABLE IF NOT EXISTS upi_payments (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) DEFAULT NULL,
+        amount NUMERIC(10, 2) NOT NULL,
+        utr_number VARCHAR(20) UNIQUE NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
+        notes TEXT DEFAULT '',
+        consultation_id VARCHAR(36) DEFAULT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        verified_at TIMESTAMPTZ DEFAULT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_utr ON upi_payments(utr_number);`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_status ON upi_payments(status);`,
+      `CREATE INDEX IF NOT EXISTS idx_upi_payments_user ON upi_payments(user_id);`,
       `CREATE TABLE IF NOT EXISTS admin_logs (
         id VARCHAR(36) PRIMARY KEY,
         user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,

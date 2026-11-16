@@ -372,6 +372,177 @@ If you did not request this password reset, please ignore this email. Your accou
 };
 
 /**
+ * Sends a verified UPI payment confirmation email to the user
+ * Styled with JurisFlow's Executive Dark & Gold aesthetic
+ */
+export const sendPaymentConfirmationEmail = async ({
+  toEmail,
+  userName = 'Valued Member',
+  amount,
+  utrNumber,
+  status = 'verified',
+  verifiedAt = new Date().toISOString(),
+  advocateName = 'JurisFlow Platform Services',
+  purpose = 'Legal Consultation / Retainer Service',
+}) => {
+  try {
+    const transporter = getTransporter(true);
+    const appUrl = resolveAppUrl();
+    let cleanUser = (process.env.EMAIL_USER || '').trim();
+    if (/@gamil\.com$/i.test(cleanUser)) {
+      cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+    }
+    const fromAddress = cleanUser
+      ? `"JurisFlow Payments" <${cleanUser}>`
+      : '"JurisFlow Payments" <no-reply@jurisflow.com>';
+
+    if (!transporter) {
+      console.warn(
+        `[Email Service] SMTP credentials not configured. Payment confirmation for UTR ${utrNumber} was not dispatched via SMTP.`
+      );
+      return { success: false, skipped: true, message: 'SMTP not configured' };
+    }
+
+    const formattedAmount = Number(amount || 0).toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const dateFormatted = new Date(verifiedAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Confirmation — JurisFlow</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #080808; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f5e6c4;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #080808; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 580px; background-color: #121212; border: 1px solid #262118; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8);">
+          <!-- Header Bar -->
+          <tr>
+            <td style="padding: 35px 40px 25px; text-align: center; border-bottom: 1px solid #262118; background: linear-gradient(180deg, #181818 0%, #121212 100%);">
+              <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 14px; background: #1c1c1c; border: 1px solid #d4af37; text-align: center; margin-bottom: 12px;">
+                <span style="font-size: 24px; color: #d4af37;">⚖️</span>
+              </div>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">JurisFlow</h1>
+              <p style="margin: 6px 0 0; font-size: 13px; font-weight: 600; color: #d4af37;">Payment Receipt & Verification Confirmed</p>
+            </td>
+          </tr>
+
+          <!-- Main Body -->
+          <tr>
+            <td style="padding: 35px 40px 25px;">
+              <div style="text-align: center; margin-bottom: 25px;">
+                <div style="display: inline-block; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 30px; padding: 6px 18px; margin-bottom: 15px;">
+                  <span style="color: #10b981; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;">✓ PAYMENT VERIFIED</span>
+                </div>
+                <div style="font-size: 36px; font-weight: 900; color: #d4af37; letter-spacing: -1px;">₹${formattedAmount}</div>
+                <div style="font-size: 12px; color: #a39e93; margin-top: 4px;">Direct UPI Payment to 7558343192-1@nyes</div>
+              </div>
+
+              <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #f5e6c4;">
+                Dear <strong>${escapeHtml(userName)}</strong>,<br>
+                Your direct UPI payment has been successfully verified by JurisFlow. The details of your transaction are summarized below:
+              </p>
+
+              <!-- Transaction Breakdown -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 20px 0; background: #181818; border: 1px solid #262118; border-radius: 12px;">
+                <tr>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 12px; color: #a39e93;">12-Digit UTR Number</td>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 13px; font-weight: 700; color: #ffffff; text-align: right; font-family: monospace;">${escapeHtml(utrNumber)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 12px; color: #a39e93;">Payee UPI ID</td>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 12px; font-weight: 700; color: #d4af37; text-align: right;">7558343192-1@nyes (JurisFlow)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 12px; color: #a39e93;">Advocate / Service</td>
+                  <td style="padding: 12px 18px; border-bottom: 1px solid #262118; font-size: 12px; font-weight: 600; color: #ffffff; text-align: right;">${escapeHtml(advocateName)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 18px; font-size: 12px; color: #a39e93;">Verified On</td>
+                  <td style="padding: 12px 18px; font-size: 12px; color: #f5e6c4; text-align: right;">${dateFormatted}</td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 30px 0 10px;">
+                <tr>
+                  <td align="center">
+                    <a href="${appUrl}/client/dashboard" target="_blank" style="display: inline-block; background: #d4af37; color: #080808; font-size: 13px; font-weight: 800; text-decoration: none; padding: 14px 34px; border-radius: 12px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
+                      Open JurisFlow Dashboard
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 22px 40px; background-color: #0e0e0e; border-top: 1px solid #262118; text-align: center;">
+              <p style="margin: 0; font-size: 11px; color: #666158; line-height: 1.5;">
+                This is an official transactional receipt generated by JurisFlow.<br>
+                &copy; ${new Date().getFullYear()} JurisFlow. Your Legal World, Organized in One Flow.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const textContent = `
+JurisFlow — Payment Receipt & Verification Confirmed
+
+Dear ${userName},
+
+Your direct UPI payment of ₹${formattedAmount} has been verified successfully.
+
+Transaction Details:
+- 12-Digit UTR: ${utrNumber}
+- Payee UPI ID: 7558343192-1@nyes (JurisFlow)
+- Advocate / Service: ${advocateName}
+- Verified On: ${dateFormatted}
+- Status: VERIFIED & CONFIRMED
+
+View your dashboard: ${appUrl}/client/dashboard
+
+© ${new Date().getFullYear()} JurisFlow. Your Legal World, Organized in One Flow.
+    `.trim();
+
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: toEmail,
+      subject: `JurisFlow Payment Verified — ₹${formattedAmount} (UTR: ${utrNumber})`,
+      text: textContent,
+      html: htmlContent,
+    });
+
+    console.log(`[Email Service] Payment confirmation email dispatched to ${toEmail}. MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId, response: info.response };
+  } catch (error) {
+    console.error(`[Email Service Error] Failed to send payment confirmation email to ${toEmail}:`, {
+      message: error.message,
+      code: error.code,
+      response: error.response,
+    });
+    return { success: false, error: error.message };
+  }
+};
+
+/**
  * Escapes HTML characters for safe template rendering
  */
 function escapeHtml(string) {
@@ -389,5 +560,6 @@ export default {
   getTransporter,
   sendWelcomeEmail,
   sendOtpEmail,
+  sendPaymentConfirmationEmail,
   resolveAppUrl,
 };
