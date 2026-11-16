@@ -327,7 +327,7 @@ export const testCheckout = async (req, res) => {
  */
 export const submitUpiPayment = async (req, res) => {
   try {
-    const { userId, advocateId, amount, utrNumber, notes, consultationId, serviceRequestId } = req.body;
+    const { userId, advocateId, amount, utrNumber, notes, consultationId, consultationRequestId, bookingId, serviceRequestId } = req.body;
     const effectiveUserId = (req.user && (req.user.id || req.user._id)) || userId;
 
     if (!effectiveUserId) {
@@ -357,6 +357,8 @@ export const submitUpiPayment = async (req, res) => {
       });
     }
 
+    const targetConsultationId = consultationId || consultationRequestId || bookingId;
+
     // Insert UPI Payment
     const paymentId = crypto.randomUUID();
     const insertRes = await query(
@@ -371,18 +373,33 @@ export const submitUpiPayment = async (req, res) => {
         numAmount,
         cleanUtr,
         notes || '',
-        consultationId || serviceRequestId || null,
+        targetConsultationId || serviceRequestId || null,
       ]
     );
 
-    // If consultation or booking was passed, mark payment_status as pending_verification
-    if (consultationId) {
+    // If consultation or booking was passed, transition to held_in_escrow and paid_ready
+    if (targetConsultationId) {
       try {
         await query(
-          `UPDATE consultation_bookings SET payment_status = 'pending_verification', updated_at = NOW() WHERE id = $1`,
-          [consultationId]
+          `UPDATE consultation_bookings 
+           SET payment_status = 'held_in_escrow', status = 'paid_ready', updated_at = NOW() 
+           WHERE id = $1 OR meeting_room_id = $1`,
+          [targetConsultationId]
         );
-      } catch (_) {}
+      } catch (cbErr) {
+        console.warn('[submitUpiPayment] Error updating consultation_bookings:', cbErr.message);
+      }
+
+      try {
+        await query(
+          `UPDATE consultation_requests 
+           SET payment_status = 'held_in_escrow', status = 'paid_ready', updated_at = NOW() 
+           WHERE id = $1 OR booking_id = $1 OR meeting_room_id = $1`,
+          [targetConsultationId]
+        );
+      } catch (crErr) {
+        console.warn('[submitUpiPayment] Error updating consultation_requests:', crErr.message);
+      }
     }
 
     // Record audit log

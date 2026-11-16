@@ -97,8 +97,16 @@ export const consultationService = {
   create: (data: any) => api.post('/consultations', data),
   instantStart: (data: { lawyerId: string; mode: 'chat' | 'call'; durationMinutes?: number; legalIssueDescription?: string }) =>
     api.post('/consultations/instant-start', data),
-  createRequest: (data: { advocateId: string; mode: 'chat' | 'call'; durationMinutes?: number; ratePerMin?: number }) =>
-    api.post('/consultations/requests', data),
+  createRequest: (data: {
+    advocateId: string;
+    channel?: 'chat' | 'call';
+    mode?: 'chat' | 'call';
+    durationMins?: number;
+    durationMinutes?: number;
+    calculatedFee?: number;
+    ratePerMin?: number;
+    matterDescription?: string;
+  }) => api.post('/consultations/requests', data),
   getRequestStatus: (requestId: string) =>
     api.get(`/consultations/requests/${requestId}`),
   getIncomingRequests: () =>

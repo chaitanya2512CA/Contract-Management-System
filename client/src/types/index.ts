@@ -90,6 +90,9 @@ export interface AvailabilitySchedule {
 
 export type ConsultationStatus =
   | 'pending'
+  | 'pending_acceptance'
+  | 'accepted_awaiting_payment'
+  | 'paid_ready'
   | 'accepted'
   | 'rejected'
   | 'declined'
@@ -118,8 +121,9 @@ export interface ConsultationBooking {
   scheduled_end: string;
   fee_amount: number;
   currency: string;
-  payment_status: 'pending' | 'paid' | 'refunded' | 'failed';
+  payment_status: 'unpaid' | 'pending' | 'pending_verification' | 'held_in_escrow' | 'paid' | 'verified' | 'released_to_advocate' | 'refunded' | 'failed';
   status: ConsultationStatus;
+  payout_status?: 'pending' | 'held_in_escrow' | 'released_to_advocate';
   legal_issue_description: string;
   urgency: 'low' | 'medium' | 'high' | 'emergency';
   client_documents?: string[];

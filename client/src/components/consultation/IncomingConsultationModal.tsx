@@ -18,10 +18,15 @@ interface ConsultationRequestItem {
   id: string;
   client_id: string;
   advocate_id: string;
+  channel?: 'chat' | 'call';
   mode: 'chat' | 'call';
-  status: 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed';
+  status: 'pending' | 'pending_acceptance' | 'accepted' | 'declined' | 'cancelled' | 'completed';
+  duration_mins?: number;
   duration_minutes: number;
+  calculated_fee?: string | number;
   rate_per_min: string | number;
+  matter_description?: string;
+  legal_issue_description?: string;
   client_name?: string;
   client_email?: string;
   client_avatar?: string;
@@ -74,9 +79,13 @@ export const IncomingConsultationModal: React.FC = () => {
 
   if (!currentRequest) return null;
 
-  const mode = currentRequest.mode;
+  const mode = currentRequest.channel || currentRequest.mode || 'chat';
+  const durationMins = currentRequest.duration_mins || currentRequest.duration_minutes || 15;
   const ratePerMin = (Number(currentRequest.rate_per_min) || 25).toFixed(2);
-  const estTotal = ((Number(currentRequest.rate_per_min) || 25) * (Number(currentRequest.duration_minutes) || 15)).toFixed(2);
+  const calculatedFeeNum = Number(currentRequest.calculated_fee);
+  const estTotal = (!isNaN(calculatedFeeNum) && calculatedFeeNum > 0
+    ? calculatedFeeNum
+    : (Number(currentRequest.rate_per_min) || 25) * durationMins).toFixed(2);
 
   const handleRespond = async (action: 'accept' | 'decline') => {
     try {
@@ -167,9 +176,17 @@ export const IncomingConsultationModal: React.FC = () => {
             <span>Requested Duration</span>
             <span className="font-bold text-[#F5E6C4] flex items-center gap-1">
               <Clock className="h-3 w-3 text-[#D4AF37]" />
-              {currentRequest.duration_minutes || 15} Mins
+              {durationMins} Mins
             </span>
           </div>
+          {(currentRequest.matter_description || currentRequest.legal_issue_description) && (
+            <div className="border-t border-[#262118] pt-2 text-[#A39E93]">
+              <span className="font-semibold text-slate-400">Legal Matter: </span>
+              <span className="text-white font-medium">
+                {currentRequest.matter_description || currentRequest.legal_issue_description}
+              </span>
+            </div>
+          )}
           <div className="border-t border-[#262118] pt-2 flex items-center justify-between font-bold text-white">
             <span>Expected Revenue</span>
             <span className="text-sm font-black text-[#10B981]">₹{estTotal}</span>

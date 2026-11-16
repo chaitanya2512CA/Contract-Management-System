@@ -80,6 +80,61 @@ async function initializeApp() {
       CREATE INDEX IF NOT EXISTS idx_upi_payments_utr ON upi_payments(utr_number);
       CREATE INDEX IF NOT EXISTS idx_upi_payments_status ON upi_payments(status);
       CREATE INDEX IF NOT EXISTS idx_upi_payments_user ON upi_payments(user_id);
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(10, 2) DEFAULT 0.00;
+      ALTER TABLE advocates ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(10, 2) DEFAULT 0.00;
+      ALTER TABLE lawyer_profiles ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(10, 2) DEFAULT 0.00;
+      ALTER TABLE consultation_bookings ADD COLUMN IF NOT EXISTS payout_status VARCHAR(30) DEFAULT 'held_in_escrow';
+      ALTER TABLE consultation_bookings ADD COLUMN IF NOT EXISTS meeting_room_id VARCHAR(100) DEFAULT '';
+
+      CREATE TABLE IF NOT EXISTS consultation_requests (
+        id VARCHAR(36) PRIMARY KEY,
+        client_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) NOT NULL,
+        channel VARCHAR(20) NOT NULL DEFAULT 'chat',
+        mode VARCHAR(20) NOT NULL DEFAULT 'chat',
+        duration_mins INT DEFAULT 15,
+        duration_minutes INT DEFAULT 15,
+        calculated_fee NUMERIC(10, 2) NOT NULL DEFAULT 499.00,
+        rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
+        matter_description TEXT DEFAULT '',
+        legal_issue_description TEXT DEFAULT '',
+        status VARCHAR(30) DEFAULT 'pending_acceptance',
+        payment_status VARCHAR(30) DEFAULT 'unpaid',
+        payout_status VARCHAR(30) DEFAULT 'pending',
+        booking_id VARCHAR(36) DEFAULT NULL,
+        meeting_room_id VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cr_client ON consultation_requests(client_id);
+      CREATE INDEX IF NOT EXISTS idx_cr_advocate ON consultation_requests(advocate_id);
+      CREATE INDEX IF NOT EXISTS idx_cr_status ON consultation_requests(status);
+
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS channel VARCHAR(20) DEFAULT 'chat';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'chat';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS duration_mins INT DEFAULT 15;
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS duration_minutes INT DEFAULT 15;
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS calculated_fee NUMERIC(10, 2) DEFAULT 499.00;
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS matter_description TEXT DEFAULT '';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS legal_issue_description TEXT DEFAULT '';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'unpaid';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS payout_status VARCHAR(30) DEFAULT 'pending';
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS booking_id VARCHAR(36) DEFAULT NULL;
+      ALTER TABLE consultation_requests ADD COLUMN IF NOT EXISTS meeting_room_id VARCHAR(100) DEFAULT '';
+
+      CREATE TABLE IF NOT EXISTS consultation_session_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        booking_id VARCHAR(36) NOT NULL,
+        advocate_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        mode VARCHAR(20) DEFAULT 'chat',
+        fee_charged NUMERIC(10, 2) DEFAULT 0,
+        status VARCHAR(30) DEFAULT 'started',
+        started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        ended_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+        duration_seconds INT DEFAULT 0
+      );
     `);
     console.log('[Vercel Serverless] Ensured schema columns and tables exist in database.');
   } catch (migErr) {

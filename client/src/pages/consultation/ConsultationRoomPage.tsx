@@ -24,6 +24,7 @@ import {
 import { consultationService, reviewService } from '../../services/api';
 import { ConsultationBooking, ChatMessage } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { UpiPaymentModal } from '../../components/payment/UpiPaymentModal';
 
 export const ConsultationRoomPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,7 @@ export const ConsultationRoomPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpiModalOpen, setIsUpiModalOpen] = useState<boolean>(false);
 
   // Astrotalk Call & Media State
   const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended'>('ringing');
@@ -60,14 +62,29 @@ export const ConsultationRoomPage: React.FC = () => {
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  const isLawyer = user?.role === 'lawyer';
+
   const isRequestPending =
     (consultation?.status as string) === 'pending' ||
-    (consultation as any)?.request_status === 'pending';
+    (consultation?.status as string) === 'pending_acceptance' ||
+    (consultation as any)?.request_status === 'pending' ||
+    (consultation as any)?.request_status === 'pending_acceptance';
 
   const isRequestDeclined =
     (consultation?.status as string) === 'declined' ||
     (consultation?.status as string) === 'rejected' ||
     (consultation as any)?.request_status === 'declined';
+
+  // Strict Lock check: If client has not completed escrow UPI deposit, room is strictly locked
+  const isEscrowLocked =
+    !isLawyer &&
+    consultation !== null &&
+    !isRequestPending &&
+    !isRequestDeclined &&
+    consultation.payment_status !== 'held_in_escrow' &&
+    consultation.payment_status !== 'paid' &&
+    consultation.payment_status !== 'verified' &&
+    consultation.payment_status !== 'released_to_advocate';
 
   const fetchConsultationData = async () => {
     if (!id) return;
@@ -95,9 +112,9 @@ export const ConsultationRoomPage: React.FC = () => {
     fetchConsultationData();
   }, [id]);
 
-  // Astrotalk Ringing to Connected transition (waits for acceptance if pending)
+  // Astrotalk Ringing to Connected transition (waits for acceptance and escrow if pending)
   useEffect(() => {
-    if (isRequestPending || isRequestDeclined) {
+    if (isRequestPending || isRequestDeclined || isEscrowLocked) {
       setCallStatus('ringing');
       return;
     }
@@ -105,7 +122,7 @@ export const ConsultationRoomPage: React.FC = () => {
       setCallStatus('connected');
     }, 2200);
     return () => clearTimeout(ringTimeout);
-  }, [isRequestPending, isRequestDeclined]);
+  }, [isRequestPending, isRequestDeclined, isEscrowLocked]);
 
   // Real-time chat & status updates via periodic polling
   useEffect(() => {
@@ -117,8 +134,8 @@ export const ConsultationRoomPage: React.FC = () => {
           setMessages(msgRes.data.messages);
         }
 
-        // If request was pending, poll consultation details to detect when accepted
-        if (isRequestPending) {
+        // Poll consultation details to detect when advocate accepts or escrow settles
+        if (isRequestPending || isEscrowLocked) {
           const detailRes = await consultationService.getById(id);
           if (detailRes.data?.success && detailRes.data.consultation) {
             setConsultation(detailRes.data.consultation);
@@ -129,16 +146,16 @@ export const ConsultationRoomPage: React.FC = () => {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [id, isRequestPending]);
+  }, [id, isRequestPending, isEscrowLocked]);
 
-  // Active session talk-time counter (counts up only once accepted)
+  // Active session talk-time counter (counts up only once accepted & escrow held)
   useEffect(() => {
-    if (callStatus === 'ended' || isRequestPending || isRequestDeclined) return;
+    if (callStatus === 'ended' || isRequestPending || isRequestDeclined || isEscrowLocked) return;
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [callStatus, isRequestPending, isRequestDeclined]);
+  }, [callStatus, isRequestPending, isRequestDeclined, isEscrowLocked]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -148,6 +165,10 @@ export const ConsultationRoomPage: React.FC = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !id || isRequestPending || isRequestDeclined) return;
+    if (isEscrowLocked) {
+      setIsUpiModalOpen(true);
+      return;
+    }
     try {
       const res = await consultationService.sendMessage(id, {
         content: newMessage.trim(),
@@ -252,14 +273,13 @@ export const ConsultationRoomPage: React.FC = () => {
     );
   }
 
-  const isLawyer = user?.role === 'lawyer';
   const isChatPath = window.location.pathname.includes('/consultation/chat/');
   const isCallPath = window.location.pathname.includes('/consultation/call/');
   const effectiveMode = isChatPath ? 'chat' : isCallPath ? 'call' : urlMode || consultation.consultation_mode || 'chat';
   const isCallMode = effectiveMode === 'call' || effectiveMode === 'audio' || effectiveMode === 'video';
 
-  const feeAmount = Number(consultation.fee_amount || 499);
-  const perMinute = Math.max(15, Math.round(feeAmount / (consultation.duration_minutes || 15)));
+  const feeAmount = Number(consultation.fee_amount || (consultation as any).calculated_fee || 499);
+  const perMinute = Math.max(15, Math.round(feeAmount / (consultation.duration_minutes || (consultation as any).duration_mins || 15)));
 
   return (
     <div className="flex h-screen flex-col bg-[#080808] text-[#F5E6C4]">
@@ -288,7 +308,12 @@ export const ConsultationRoomPage: React.FC = () => {
               <h2 className="text-sm font-bold text-white sm:text-base">
                 {isLawyer ? consultation.client_name : consultation.lawyer_name}
               </h2>
-              {isRequestPending ? (
+              {isEscrowLocked ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-extrabold text-amber-400 ring-1 ring-amber-500/40">
+                  <Lock className="h-3 w-3 text-amber-400" />
+                  Escrow Payment Required
+                </span>
+              ) : isRequestPending ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400 ring-1 ring-amber-500/30 animate-pulse">
                   <Radio className="h-3 w-3" />
                   Waiting for Advocate Acceptance...
@@ -329,19 +354,84 @@ export const ConsultationRoomPage: React.FC = () => {
             <span>End-to-End Encrypted</span>
           </div>
 
+          {/* If escrow is locked for client, prominent Unlock Room button */}
+          {isEscrowLocked && (
+            <button
+              onClick={() => setIsUpiModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-2xl bg-[#D4AF37] px-4 py-2 text-xs font-black text-[#080808] shadow-md shadow-[#D4AF37]/20 transition hover:bg-[#AA7C11]"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Unlock Room (₹{feeAmount})</span>
+            </button>
+          )}
+
           {/* End Consultation Button */}
           <button
             onClick={handleEndSession}
-            className="flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-rose-950 transition hover:bg-rose-700"
+            className="flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-rose-950 transition hover:bg-rose-700 active:scale-95"
+            title="Conclude meeting and release escrow funds to advocate"
           >
             <PhoneOff className="h-4 w-4" />
-            <span>{isCallMode ? 'End Call' : 'End Session'}</span>
+            <span>End & Complete Consultation</span>
           </button>
         </div>
       </header>
 
       {/* Main Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* Strict Escrow Paywall Overlay (Visible only when client hasn't deposited escrow) */}
+        {isEscrowLocked && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="w-full max-w-md rounded-3xl border border-[#D4AF37]/50 bg-[#121212] p-6 text-center text-[#F5E6C4] shadow-2xl shadow-[#D4AF37]/15 ring-1 ring-[#D4AF37]/40">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D4AF37] bg-[#1A1A1A] text-[#D4AF37] shadow-inner">
+                <Lock className="h-7 w-7 text-[#D4AF37]" />
+              </div>
+
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-300">
+                <Clock className="h-3.5 w-3.5 animate-pulse text-amber-300" />
+                <span>Advocate Accepted • Escrow Required</span>
+              </div>
+
+              <h3 className="mt-3 text-lg font-black text-white">
+                Consultation Locked
+              </h3>
+              <p className="mt-1 text-xs text-[#A39E93]">
+                Adv. {consultation.lawyer_name} is waiting in the room. Complete your direct UPI escrow payment of <strong className="text-white">₹{feeAmount}</strong> to unlock live chat, audio, and video call lines.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-3.5 text-xs text-left space-y-2">
+                <div className="flex justify-between text-[#A39E93]">
+                  <span>Channel</span>
+                  <span className="font-bold text-white capitalize">{effectiveMode} Consultation</span>
+                </div>
+                <div className="flex justify-between text-[#A39E93]">
+                  <span>Duration</span>
+                  <span className="font-bold text-white">{consultation.duration_minutes || (consultation as any).duration_mins || 15} Mins</span>
+                </div>
+                <div className="border-t border-[#262118] pt-2 flex justify-between font-bold">
+                  <span className="text-white">Escrow Deposit</span>
+                  <span className="text-sm font-black text-[#D4AF37]">₹{feeAmount}</span>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[11px] text-[#A39E93] text-left flex items-start gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-[#10B981] shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-white">100% Escrow Protection:</strong> Funds remain securely held in escrow and are only released to Adv. {consultation.lawyer_name} after you end and complete the session.
+                </span>
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setIsUpiModalOpen(true)}
+                className="mt-5 w-full flex items-center justify-center gap-2 rounded-2xl bg-[#D4AF37] py-3.5 text-xs font-black text-[#080808] shadow-lg shadow-[#D4AF37]/25 transition hover:bg-[#AA7C11] active:scale-95"
+              >
+                <Lock className="h-4 w-4" />
+                <span>Pay ₹{feeAmount} via UPI & Unlock Room</span>
+              </button>
+            </div>
+          </div>
+        )}
         {/* Left Area: Calling Canvas if Call mode, or Chat Canvas if Chat mode */}
         {isCallMode ? (
           <div className="relative flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-[#080808] via-[#121212] to-[#080808] p-6">
@@ -746,6 +836,22 @@ export const ConsultationRoomPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Embedded Direct UPI Payment Modal for Escrow Settlement */}
+      <UpiPaymentModal
+        isOpen={isUpiModalOpen}
+        onClose={() => setIsUpiModalOpen(false)}
+        amount={feeAmount}
+        advocateId={consultation.lawyer_id || (consultation as any).advocate_id}
+        advocateName={consultation.lawyer_name}
+        consultationId={consultation.id}
+        purpose={`Escrow Legal Consultation with Adv. ${consultation.lawyer_name}`}
+        onSuccess={() => {
+          setIsUpiModalOpen(false);
+          setConsultation((prev) => (prev ? { ...prev, payment_status: 'held_in_escrow' } : null));
+          fetchConsultationData();
+        }}
+      />
     </div>
   );
 };

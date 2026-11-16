@@ -34,6 +34,7 @@ export const LawyerDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [consultations, setConsultations] = useState<ConsultationBooking[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [cases, setCases] = useState<LegalCase[]>([]);
   const [earnings, setEarnings] = useState<LawyerEarningsSummary | null>(null);
   const [ledgerItems, setLedgerItems] = useState<any[]>([]);
@@ -48,10 +49,11 @@ export const LawyerDashboard: React.FC = () => {
   const fetchLawyerData = async () => {
     try {
       setIsLoading(true);
-      const [cRes, csRes, eRes] = await Promise.all([
+      const [cRes, csRes, eRes, reqRes] = await Promise.all([
         consultationService.getAll(),
         caseService.getAll(),
         financialService.getEarnings(),
+        consultationService.getIncomingRequests().catch(() => ({ data: { success: false, requests: [] } })),
       ]);
 
       if (cRes.data.success) setConsultations(cRes.data.consultations);
@@ -59,6 +61,9 @@ export const LawyerDashboard: React.FC = () => {
       if (eRes.data.success) {
         setEarnings(eRes.data.summary);
         setLedgerItems(eRes.data.ledger);
+      }
+      if (reqRes?.data?.success && Array.isArray(reqRes.data.requests)) {
+        setIncomingRequests(reqRes.data.requests);
       }
 
       if (lawyerProfile?.primary_specialty) {
@@ -73,7 +78,43 @@ export const LawyerDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchLawyerData();
+
+    // Poll for incoming consultation requests every 4 seconds
+    const pollTimer = setInterval(async () => {
+      try {
+        const res = await consultationService.getIncomingRequests();
+        if (res.data?.success && Array.isArray(res.data.requests)) {
+          setIncomingRequests(res.data.requests);
+        }
+      } catch (_) {}
+    }, 4000);
+
+    return () => clearInterval(pollTimer);
   }, []);
+
+  const handleAcceptIncomingRequest = async (requestId: string, reqMode: string = 'chat') => {
+    try {
+      const res = await consultationService.respondToRequest(requestId, 'accept');
+      if (res.data?.success) {
+        setIncomingRequests((prev) => prev.filter((r) => r.id !== requestId));
+        const destinationId = res.data.bookingId || requestId;
+        fetchLawyerData();
+        navigate(`/consultation/${reqMode || 'chat'}/${destinationId}`);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to accept consultation request.');
+    }
+  };
+
+  const handleDeclineIncomingRequest = async (requestId: string) => {
+    try {
+      await consultationService.respondToRequest(requestId, 'decline');
+      setIncomingRequests((prev) => prev.filter((r) => r.id !== requestId));
+      fetchLawyerData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to decline consultation request.');
+    }
+  };
 
   const handleAcceptBooking = async (id: string) => {
     try {
@@ -113,9 +154,10 @@ export const LawyerDashboard: React.FC = () => {
     }
   };
 
-  const pendingRequests = consultations.filter((c) => c.status === 'pending');
+  const legacyPending = consultations.filter((c) => c.status === 'pending');
+  const totalPendingCount = incomingRequests.length + legacyPending.length;
   const todaySessions = consultations.filter(
-    (c) => c.status === 'confirmed' || c.status === 'accepted' || c.status === 'in_progress'
+    (c) => c.status === 'confirmed' || c.status === 'accepted' || c.status === 'in_progress' || c.status === 'paid_ready'
   );
 
   return (
@@ -212,8 +254,8 @@ export const LawyerDashboard: React.FC = () => {
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <span className="text-xs font-semibold text-slate-500">Pending Requests</span>
-            <p className="mt-2 text-2xl font-black text-amber-500">{pendingRequests.length}</p>
-            <p className="mt-1 text-[10px] text-slate-400">Require client acceptance</p>
+            <p className="mt-2 text-2xl font-black text-amber-500">{totalPendingCount}</p>
+            <p className="mt-1 text-[10px] text-slate-400">Require advocate response</p>
           </div>
         </div>
 
@@ -346,18 +388,75 @@ export const LawyerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Pending Consultation Requests (1-Click Accept / Reject) */}
-        {pendingRequests.length > 0 && (
+        {/* Incoming & Pending Consultation Requests (1-Click Accept / Decline) */}
+        {totalPendingCount > 0 && (
           <div className="rounded-3xl border border-amber-200 bg-amber-50/50 p-6 dark:border-amber-900/50 dark:bg-amber-950/20">
-            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-              <Clock className="h-5 w-5" />
-              <h3 className="text-sm font-bold">Pending Consultation Requests ({pendingRequests.length})</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                <Clock className="h-5 w-5" />
+                <h3 className="text-sm font-bold">Incoming Consultation Requests ({totalPendingCount})</h3>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Channel
+              </span>
             </div>
+
             <div className="mt-4 space-y-3">
-              {pendingRequests.map((req) => (
+              {/* Instant Astrotalk Consultation Requests */}
+              {incomingRequests.map((req) => {
+                const reqChannel = req.channel || req.mode || 'chat';
+                const duration = req.duration_mins || req.duration_minutes || 15;
+                const fee = req.calculated_fee || req.fee_amount || 499;
+                const matter = req.matter_description || req.legal_issue_description || 'Instant Legal Consultation';
+
+                return (
+                  <div
+                    key={req.id}
+                    className="flex flex-col justify-between gap-4 rounded-2xl border border-amber-300/80 bg-white p-4 shadow-sm dark:border-amber-900/60 dark:bg-slate-900 sm:flex-row sm:items-center"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {req.client_name || 'Client User'}
+                        </span>
+                        <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+                          ⚡ Instant {reqChannel} ({duration} min)
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-700 dark:text-slate-200 font-medium">
+                        <span className="text-slate-400 font-normal">Legal Matter:</span> {matter}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Requested: {new Date(req.created_at || Date.now()).toLocaleTimeString()} • Escrow Fee: <strong className="text-emerald-600 font-bold">₹{fee}</strong>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleAcceptIncomingRequest(req.id, reqChannel)}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition shadow-sm"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Accept Request</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeclineIncomingRequest(req.id)}
+                        className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-slate-800 transition"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Legacy Bookings */}
+              {legacyPending.map((req) => (
                 <div
                   key={req.id}
-                  className="flex flex-col justify-between gap-4 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center"
+                  className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center"
                 >
                   <div>
                     <div className="flex items-center gap-2">

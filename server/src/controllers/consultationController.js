@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { query } from '../config/db.js';
+import { sendConsultationAcceptedEmail, sendEscrowPayoutReleasedEmail } from '../utils/email.js';
 
 /**
  * Create Consultation Booking Request
@@ -277,11 +278,13 @@ export const getConsultationById = async (req, res) => {
             lawyer_avatar: reqItem.lawyer_avatar,
             practice_area: reqItem.lawyer_specialty || 'General Consultation',
             consultation_mode: reqItem.mode === 'call' ? 'audio' : 'chat',
-            duration_minutes: reqItem.duration_minutes || 15,
-            fee_amount: (parseFloat(reqItem.rate_per_min) || 25) * (reqItem.duration_minutes || 15),
+            duration_minutes: reqItem.duration_minutes || reqItem.duration_mins || 15,
+            fee_amount: reqItem.calculated_fee || (parseFloat(reqItem.rate_per_min) || 25) * (reqItem.duration_minutes || reqItem.duration_mins || 15),
             status: reqItem.status,
             request_status: reqItem.status,
-            meeting_room_id: `room_${reqItem.id}`,
+            payment_status: reqItem.payment_status || 'unpaid',
+            payout_status: reqItem.payout_status || 'pending',
+            meeting_room_id: reqItem.meeting_room_id || `room_${reqItem.id}`,
             created_at: reqItem.created_at,
           },
         });
@@ -717,6 +720,9 @@ export const startInstantConsultation = async (req, res) => {
 /**
  * End Active Consultation Session & Persist Logs
  */
+/**
+ * Astrotalk End Consultation Session & Release Escrow
+ */
 export const endConsultationSession = async (req, res) => {
   try {
     const { id } = req.params;
@@ -731,16 +737,110 @@ export const endConsultationSession = async (req, res) => {
     );
 
     // Update consultation booking
-    await query(
+    const bRes = await query(
       `UPDATE consultation_bookings
-       SET status = 'completed', completed_at = NOW(), lawyer_notes = COALESCE($1, lawyer_notes)
-       WHERE id = $2`,
-      [notes, id]
+       SET status = 'completed', completed_at = NOW(), lawyer_notes = COALESCE($1, lawyer_notes),
+           payment_status = CASE WHEN payment_status = 'held_in_escrow' THEN 'released_to_advocate' ELSE payment_status END,
+           payout_status = 'released_to_advocate',
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [notes || null, id]
     );
+
+    // Also update consultation_requests if linked
+    await query(
+      `UPDATE consultation_requests
+       SET status = 'completed', payout_status = 'released_to_advocate',
+           payment_status = CASE WHEN payment_status = 'held_in_escrow' THEN 'released_to_advocate' ELSE payment_status END,
+           updated_at = NOW()
+       WHERE id = $1 OR booking_id = $1`,
+      [id]
+    );
+
+    // Release escrow and credit advocate balance
+    if (bRes.rows.length > 0) {
+      const booking = bRes.rows[0];
+      const gross = parseFloat(booking.fee_amount) || 0;
+      if (gross > 0) {
+        const commissionRate = 15.0; // 15% platform commission
+        const commission = (gross * commissionRate) / 100;
+        const net = gross - commission;
+
+        // Fetch advocate user details
+        const advUserRes = await query(
+          `SELECT u.id, u.name, u.email
+           FROM users u
+           LEFT JOIN lawyer_profiles lp ON lp.user_id = u.id OR lp.id = $1
+           WHERE u.id = $1 OR lp.id = $1 OR lp.user_id = $1
+           LIMIT 1`,
+          [booking.lawyer_id]
+        );
+
+        // Fetch client details
+        const cliUserRes = await query(
+          `SELECT id, name, email FROM users WHERE id = $1`,
+          [booking.client_id]
+        );
+
+        const advocateUser = advUserRes.rows[0];
+        const clientUser = cliUserRes.rows[0];
+
+        // Insert into lawyer_earnings if not already recorded
+        const existingEarning = await query(
+          'SELECT id FROM lawyer_earnings WHERE description LIKE $1',
+          [`%${booking.booking_ref || id}%`]
+        );
+
+        if (existingEarning.rows.length === 0) {
+          await query(
+            `INSERT INTO lawyer_earnings (
+               id, lawyer_id, transaction_id, gross_amount, platform_commission, net_earnings, description, status, created_at
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', NOW())`,
+            [
+              crypto.randomUUID(),
+              booking.lawyer_id,
+              booking.id,
+              gross,
+              commission,
+              net,
+              `Consultation escrow release (${booking.booking_ref || id})`,
+            ]
+          );
+
+          // Update advocate wallet balance in users table
+          if (advocateUser?.id) {
+            try {
+              await query(
+                `UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1 WHERE id = $2`,
+                [net, advocateUser.id]
+              );
+            } catch (_) {}
+          }
+
+          // Dispatch automated payout confirmation email to advocate (await for serverless)
+          if (advocateUser?.email) {
+            try {
+              await sendEscrowPayoutReleasedEmail({
+                toEmail: advocateUser.email,
+                advocateName: advocateUser.name || 'Advocate',
+                clientName: clientUser?.name || 'Valued Client',
+                grossAmount: gross,
+                platformCommission: commission,
+                netAmount: net,
+                consultationRef: booking.booking_ref || id,
+              });
+            } catch (mailErr) {
+              console.warn('[Escrow Release Email Notice]:', mailErr.message);
+            }
+          }
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Consultation session concluded and recorded successfully.',
+      message: 'Consultation session concluded and escrow released to advocate successfully.',
     });
   } catch (error) {
     console.error('Error in endConsultationSession:', error);
@@ -748,14 +848,28 @@ export const endConsultationSession = async (req, res) => {
   }
 };
 
-
 /**
- * Create Consultation Request (Astrotalk request pattern)
+ * Step 1: Create Consultation Request (Client Sends Request — No Payment Required Yet)
  */
 export const createConsultationRequest = async (req, res) => {
   try {
-    const clientId = req.user.id || req.user._id;
-    const { advocateId, mode = 'chat', durationMinutes = 15, ratePerMin } = req.body;
+    const clientId = (req.user && (req.user.id || req.user._id)) || req.body.clientId;
+    if (!clientId) {
+      return res.status(401).json({ success: false, message: 'Authentication required to request a consultation.' });
+    }
+
+    const {
+      advocateId,
+      channel,
+      mode = channel || 'chat',
+      durationMins,
+      durationMinutes = durationMins || 15,
+      ratePerMin,
+      calculatedFee,
+      matterDescription,
+      legalDescription = matterDescription || 'Immediate Legal Consultation',
+      legalIssueDescription = legalDescription,
+    } = req.body;
 
     if (!advocateId) {
       return res.status(400).json({ success: false, message: 'Advocate ID is required.' });
@@ -767,61 +881,125 @@ export const createConsultationRequest = async (req, res) => {
         id VARCHAR(36) PRIMARY KEY,
         client_id VARCHAR(36) NOT NULL,
         advocate_id VARCHAR(36) NOT NULL,
-        mode VARCHAR(20) NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
-        duration_minutes INT DEFAULT 0,
+        channel VARCHAR(20) NOT NULL DEFAULT 'chat',
+        mode VARCHAR(20) NOT NULL DEFAULT 'chat',
+        duration_mins INT DEFAULT 15,
+        duration_minutes INT DEFAULT 15,
+        calculated_fee NUMERIC(10, 2) NOT NULL DEFAULT 499.00,
         rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
-        booking_id VARCHAR(36),
+        matter_description TEXT DEFAULT '',
+        legal_issue_description TEXT DEFAULT '',
+        status VARCHAR(30) DEFAULT 'pending_acceptance',
+        payment_status VARCHAR(30) DEFAULT 'unpaid',
+        payout_status VARCHAR(30) DEFAULT 'pending',
+        booking_id VARCHAR(36) DEFAULT NULL,
+        meeting_room_id VARCHAR(100) DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
-    // Fetch advocate details to get their exact rate and user_id
+    // Fetch advocate details across lawyer_profiles, advocates, and users
     const advocateRes = await query(
-      `SELECT lp.id as profile_id, lp.user_id, lp.full_name, lp.consultation_fee_15
-       FROM lawyer_profiles lp
-       WHERE lp.id = $1 OR lp.user_id = $1`,
+      `SELECT lp.id as profile_id, lp.user_id, COALESCE(lp.full_name, a.full_name, u.name, 'Advocate') as full_name,
+              lp.consultation_fee_15, lp.consultation_fee_30, lp.consultation_fee_60,
+              COALESCE(u.email, a.email) as email,
+              COALESCE(lp.primary_specialty, a.primary_specialty, 'Legal Consultation') as primary_specialty
+       FROM users u
+       LEFT JOIN lawyer_profiles lp ON lp.user_id = u.id OR lp.id = $1
+       LEFT JOIN advocates a ON a.user_id = u.id OR a.id = $1
+       WHERE u.id = $1 OR lp.id = $1 OR a.id = $1 OR a.user_id = $1
+       LIMIT 1`,
       [advocateId]
     );
 
     let targetAdvocateId = advocateId;
-    let computedRate = ratePerMin ? parseFloat(ratePerMin) : 25.0;
+    let targetUserId = advocateId;
+    let advocateName = 'Advocate';
+    let fee15 = 499, fee30 = 899, fee60 = 1499;
 
     if (advocateRes.rows.length > 0) {
       const adv = advocateRes.rows[0];
-      targetAdvocateId = adv.user_id || adv.profile_id;
-      const fee15 = parseFloat(adv.consultation_fee_15) || 499;
-      if (!ratePerMin) {
-        computedRate = Math.max(15, Math.round(fee15 / 15));
-      }
+      targetAdvocateId = adv.profile_id || adv.user_id || advocateId;
+      targetUserId = adv.user_id || advocateId;
+      advocateName = adv.full_name;
+      fee15 = parseFloat(adv.consultation_fee_15) || 499;
+      fee30 = parseFloat(adv.consultation_fee_30) || 899;
+      fee60 = parseFloat(adv.consultation_fee_60) || 1499;
     }
+
+    const chosenDuration = parseInt(durationMinutes, 10) || 15;
+    let sessionFee = parseFloat(calculatedFee);
+    if (!sessionFee || isNaN(sessionFee) || sessionFee <= 0) {
+      if (chosenDuration === 30) sessionFee = fee30;
+      else if (chosenDuration === 60) sessionFee = fee60;
+      else sessionFee = fee15;
+    }
+    const computedRate = parseFloat(ratePerMin) || Math.max(15, Math.round(sessionFee / chosenDuration));
+    const finalMatter = (legalIssueDescription || matterDescription || legalDescription || 'Immediate Legal Consultation').trim();
+    const finalChannel = (channel || mode || 'chat').toLowerCase();
 
     const requestId = crypto.randomUUID();
 
+    // Clean INSERT with exact parameter alignment
     await query(
       `INSERT INTO consultation_requests (
-         id, client_id, advocate_id, mode, status, duration_minutes, rate_per_min, created_at, updated_at
-       ) VALUES ($1, $2, $3, 'pending', $4, $5, NOW(), NOW())`,
-      [requestId, clientId, targetAdvocateId, mode, durationMinutes, computedRate]
+         id, client_id, advocate_id, channel, mode, duration_mins, duration_minutes,
+         calculated_fee, rate_per_min, matter_description, legal_issue_description,
+         status, payment_status, payout_status, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending_acceptance', 'unpaid', 'pending', NOW(), NOW())`,
+      [
+        requestId,
+        clientId,
+        targetAdvocateId,
+        finalChannel,
+        finalChannel,
+        chosenDuration,
+        chosenDuration,
+        sessionFee,
+        computedRate,
+        finalMatter,
+        finalMatter,
+      ]
     );
 
-    const result = await query(
-      `SELECT cr.*, u.name as advocate_name, u.avatar as advocate_avatar
-       FROM consultation_requests cr
-       LEFT JOIN users u ON cr.advocate_id = u.id
-       WHERE cr.id = $1`,
-      [requestId]
-    );
+    // Notify advocate
+    try {
+      await query(
+        `INSERT INTO notifications (id, recipient_id, title, message, type, link)
+         VALUES ($1, $2, $3, $4, 'consultation_request', $5)`,
+        [
+          crypto.randomUUID(),
+          targetUserId,
+          'New Consultation Request Received',
+          `Client ${(req.user && req.user.name) || 'A client'} requested a ${chosenDuration}-min ${finalChannel.toUpperCase()} consultation for: "${finalMatter.substring(0, 50)}..." (Fee: ₹${sessionFee})`,
+          '/lawyer/dashboard',
+        ]
+      );
+    } catch (_) {}
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Consultation request sent successfully. Waiting for advocate acceptance.',
-      request: result.rows[0] || { id: requestId, status: 'pending', mode, rate_per_min: computedRate },
+      request: {
+        id: requestId,
+        client_id: clientId,
+        advocate_id: targetAdvocateId,
+        advocate_name: advocateName,
+        channel: finalChannel,
+        mode: finalChannel,
+        duration_mins: chosenDuration,
+        duration_minutes: chosenDuration,
+        calculated_fee: sessionFee,
+        rate_per_min: computedRate,
+        matter_description: finalMatter,
+        status: 'pending_acceptance',
+        payment_status: 'unpaid',
+      },
     });
   } catch (error) {
     console.error('Error in createConsultationRequest:', error);
-    res.status(500).json({ success: false, message: 'Failed to create consultation request.' });
+    return res.status(500).json({ success: false, message: 'Failed to create consultation request.', error: error.message });
   }
 };
 
@@ -833,11 +1011,14 @@ export const getConsultationRequestStatus = async (req, res) => {
     const { id } = req.params;
     const result = await query(
       `SELECT cr.*,
-              adv.name as advocate_name, adv.avatar as advocate_avatar,
-              cli.name as client_name, cli.avatar as client_avatar,
-              cb.meeting_room_id
+              COALESCE(adv.name, adv.full_name, lp.full_name, 'Advocate') as advocate_name,
+              COALESCE(adv.avatar, '') as advocate_avatar,
+              cli.name as client_name, cli.email as client_email, cli.avatar as client_avatar,
+              cb.meeting_room_id, cb.payment_status as booking_payment_status,
+              cb.status as booking_status
        FROM consultation_requests cr
        LEFT JOIN users adv ON cr.advocate_id = adv.id
+       LEFT JOIN lawyer_profiles lp ON cr.advocate_id = lp.id OR cr.advocate_id = lp.user_id
        LEFT JOIN users cli ON cr.client_id = cli.id
        LEFT JOIN consultation_bookings cb ON cr.booking_id = cb.id
        WHERE cr.id = $1`,
@@ -849,13 +1030,31 @@ export const getConsultationRequestStatus = async (req, res) => {
     }
 
     const request = result.rows[0];
+    const isAccepted =
+      request.status === 'accepted_awaiting_payment' ||
+      request.status === 'accepted' ||
+      request.status === 'paid_ready' ||
+      request.status === 'in_progress';
+
+    const isPaid =
+      request.payment_status === 'held_in_escrow' ||
+      request.payment_status === 'paid' ||
+      request.booking_payment_status === 'held_in_escrow' ||
+      request.booking_payment_status === 'paid';
+
     res.status(200).json({
       success: true,
       request,
       bookingId: request.booking_id || request.id,
-      isAccepted: request.status === 'accepted',
-      isDeclined: request.status === 'declined',
-      isPending: request.status === 'pending',
+      meetingRoomId: request.meeting_room_id,
+      status: request.status,
+      paymentStatus: request.payment_status,
+      isPending: request.status === 'pending_acceptance' || request.status === 'pending',
+      isAccepted,
+      isAwaitingPayment: request.status === 'accepted_awaiting_payment',
+      isPaidReady: request.status === 'paid_ready' || request.status === 'in_progress',
+      isPaid,
+      isDeclined: request.status === 'declined' || request.status === 'rejected',
     });
   } catch (error) {
     console.error('Error in getConsultationRequestStatus:', error);
@@ -864,38 +1063,22 @@ export const getConsultationRequestStatus = async (req, res) => {
 };
 
 /**
- * Get Incoming Consultation Requests (for Advocate Dashboard polling)
+ * Step 2: Get Incoming Consultation Requests (for Advocate Dashboard)
  */
 export const getIncomingConsultationRequests = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-
-    // Ensure table exists
-    await query(`
-      CREATE TABLE IF NOT EXISTS consultation_requests (
-        id VARCHAR(36) PRIMARY KEY,
-        client_id VARCHAR(36) NOT NULL,
-        advocate_id VARCHAR(36) NOT NULL,
-        mode VARCHAR(20) NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
-        duration_minutes INT DEFAULT 0,
-        rate_per_min NUMERIC(10, 2) DEFAULT 25.00,
-        booking_id VARCHAR(36),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
 
     const lpRes = await query('SELECT id FROM lawyer_profiles WHERE user_id = $1', [userId]);
     const lawyerProfileId = lpRes.rows[0]?.id;
 
     const result = await query(
       `SELECT cr.*,
-              cli.name as client_name, cli.email as client_email, cli.avatar as client_avatar
+              cli.name as client_name, cli.email as client_email, cli.phone as client_phone, cli.avatar as client_avatar
        FROM consultation_requests cr
        JOIN users cli ON cr.client_id = cli.id
        WHERE (cr.advocate_id = $1 OR cr.advocate_id = $2)
-         AND cr.status = 'pending'
+         AND (cr.status = 'pending_acceptance' OR cr.status = 'pending')
        ORDER BY cr.created_at DESC`,
       [userId, lawyerProfileId || userId]
     );
@@ -911,7 +1094,7 @@ export const getIncomingConsultationRequests = async (req, res) => {
 };
 
 /**
- * Respond to Consultation Request (Advocate Accepts or Declines)
+ * Step 2: Respond to Consultation Request (Advocate Accepts or Declines)
  */
 export const respondToConsultationRequest = async (req, res) => {
   try {
@@ -941,44 +1124,53 @@ export const respondToConsultationRequest = async (req, res) => {
       });
     }
 
-    // Action is 'accept'
+    // Action is 'accept' -> transition to 'accepted_awaiting_payment'
     let bookingId = request.booking_id;
+    const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const meetingRoomId = `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const durationMins = request.duration_mins || request.duration_minutes || 15;
+    const fee = parseFloat(request.calculated_fee) || ((parseFloat(request.rate_per_min) || 25) * durationMins);
+
+    // Fetch advocate profile
+    const advRes = await query(
+      `SELECT id, user_id, primary_specialty, full_name, email FROM lawyer_profiles WHERE user_id = $1 OR id = $1
+       UNION
+       SELECT id, user_id, primary_specialty, full_name, email FROM advocates WHERE user_id = $1 OR id = $1
+       LIMIT 1`,
+      [request.advocate_id]
+    );
+
+    const lawyer = advRes.rows[0] || {
+      id: request.advocate_id,
+      user_id: request.advocate_id,
+      primary_specialty: 'Legal Consultation',
+      full_name: 'Advocate',
+    };
+
+    // Fetch client details
+    const clientRes = await query('SELECT id, name, email FROM users WHERE id = $1', [request.client_id]);
+    const client = clientRes.rows[0] || { name: 'Valued Client', email: '' };
+
     if (!bookingId) {
       bookingId = crypto.randomUUID();
-      const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const meetingRoomId = `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-      const durationMins = request.duration_minutes || 15;
-      const rate = parseFloat(request.rate_per_min) || 25;
-      const fee = rate * durationMins;
 
-      // Fetch advocate profile
-      const advRes = await query(
-        'SELECT id, user_id, primary_specialty, full_name FROM lawyer_profiles WHERE user_id = $1 OR id = $1',
-        [request.advocate_id]
-      );
-      const lawyer = advRes.rows[0] || {
-        id: request.advocate_id,
-        user_id: request.advocate_id,
-        primary_specialty: 'Legal Consultation',
-        full_name: 'Advocate',
-      };
-
-      // Insert confirmed consultation booking
+      // Insert consultation booking with status 'accepted_awaiting_payment' and payment_status 'unpaid'
       await query(
         `INSERT INTO consultation_bookings (
            id, booking_ref, client_id, lawyer_id, practice_area, consultation_mode,
            duration_minutes, scheduled_start, scheduled_end, fee_amount, currency,
-           payment_status, status, legal_issue_description, urgency, meeting_room_id
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '15 minutes', $8, 'INR', 'paid', 'confirmed', 'Instant Consultation Accepted', 'high', $9)`,
+           payment_status, status, legal_issue_description, urgency, meeting_room_id, payout_status
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '15 minutes', $8, 'INR', 'unpaid', 'accepted_awaiting_payment', $9, 'high', $10, 'held_in_escrow')`,
         [
           bookingId,
           bookingRef,
           request.client_id,
           lawyer.id,
-          lawyer.primary_specialty,
-          request.mode === 'call' ? 'audio' : 'chat',
+          lawyer.primary_specialty || 'General Legal Counsel',
+          request.channel === 'call' || request.mode === 'call' ? 'audio' : 'chat',
           durationMins,
           fee,
+          request.matter_description || 'Instant Legal Consultation',
           meetingRoomId,
         ]
       );
@@ -990,44 +1182,56 @@ export const respondToConsultationRequest = async (req, res) => {
         [convId, bookingId, request.client_id, lawyer.user_id]
       );
 
-      // Initial message
-      const greeting = request.mode === 'chat'
-        ? `Consultation accepted! ${lawyer.full_name} is online and ready for consultation.`
-        : `Audio consultation accepted! Connecting live with ${lawyer.full_name}.`;
+      // Initial message in conversation
+      const greeting =
+        request.channel === 'chat' || request.mode === 'chat'
+          ? `Consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to unlock live messaging.`
+          : `Call consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to begin live call.`;
 
       await query(
         `INSERT INTO messages (id, conversation_id, booking_id, sender_id, recipient_id, content, message_type)
-         VALUES ($1, $2, $3, $4, $5, $6, 'text')`,
+         VALUES ($1, $2, $3, $4, $5, $6, 'system')`,
         [crypto.randomUUID(), convId, bookingId, lawyer.user_id, request.client_id, greeting]
-      );
-
-      // Session log
-      await query(
-        `INSERT INTO consultation_session_logs (
-           id, booking_id, advocate_id, user_id, mode, fee_charged, status, started_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, 'started', NOW())`,
-        [crypto.randomUUID(), bookingId, lawyer.id, request.client_id, request.mode, fee]
       );
     }
 
-    // Update request
+    // Update request to 'accepted_awaiting_payment'
     await query(
       `UPDATE consultation_requests
-       SET status = 'accepted', booking_id = $1, updated_at = NOW()
-       WHERE id = $2`,
-      [bookingId, id]
+       SET status = 'accepted_awaiting_payment', booking_id = $1, meeting_room_id = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [bookingId, meetingRoomId, id]
     );
+
+    // Send automated email to client informing them advocate accepted
+    if (client.email) {
+      try {
+        await sendConsultationAcceptedEmail({
+          toEmail: client.email,
+          userName: client.name,
+          advocateName: lawyer.full_name,
+          channel: request.channel || request.mode || 'Chat',
+          durationMins,
+          amount: fee,
+          bookingId,
+        });
+      } catch (mailErr) {
+        console.warn('[Consultation Accept Email Notice]:', mailErr.message);
+      }
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Consultation request accepted. Session room is live.',
-      status: 'accepted',
+      message: 'Consultation request accepted. Client has been notified to complete direct UPI escrow payment.',
+      status: 'accepted_awaiting_payment',
       bookingId,
+      meetingRoomId,
       requestId: id,
+      fee,
     });
   } catch (error) {
     console.error('Error in respondToConsultationRequest:', error);
-    res.status(500).json({ success: false, message: 'Failed to respond to consultation request.' });
+    res.status(500).json({ success: false, message: 'Failed to respond to consultation request.', error: error.message });
   }
 };
 

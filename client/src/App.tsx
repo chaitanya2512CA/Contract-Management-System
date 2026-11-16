@@ -61,10 +61,13 @@ import { AdminEventApprovalsPage } from './pages/admin/AdminEventApprovalsPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
 import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
+import { IncomingConsultationModal } from './components/consultation/IncomingConsultationModal';
 
 export const App: React.FC = () => {
   return (
-    <Routes>
+    <>
+      <IncomingConsultationModal />
+      <Routes>
       {/* JurisFlow Public & Marketplace Pages */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/lawyers" element={<LawyerDirectoryPage />} />
@@ -246,6 +249,7 @@ export const App: React.FC = () => {
       {/* 404 Fallback */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </>
   );
 };
 export default App;

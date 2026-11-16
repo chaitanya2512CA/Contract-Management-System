@@ -49,6 +49,8 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
 
   // Request & Accept flow states
   const [isWaitingForAcceptance, setIsWaitingForAcceptance] = useState<boolean>(false);
+  const [isAwaitingPayment, setIsAwaitingPayment] = useState<boolean>(false);
+  const [acceptedBookingId, setAcceptedBookingId] = useState<string | null>(null);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const pollTimerRef = useRef<any>(null);
 
@@ -83,7 +85,9 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
       }
     }
     setIsWaitingForAcceptance(false);
+    setIsAwaitingPayment(false);
     setActiveRequestId(null);
+    setAcceptedBookingId(null);
     setIsLoading(false);
     setError(null);
     onClose();
@@ -125,32 +129,45 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
         const res = await consultationService.getRequestStatus(requestId);
         if (res.data?.success) {
           const status = res.data.status;
-          if (status === 'accepted') {
+          const isAwaiting = res.data.isAwaitingPayment || status === 'accepted_awaiting_payment';
+          const isPaidReady = res.data.isPaidReady || status === 'paid_ready' || status === 'in_progress' || status === 'accepted';
+
+          if (isPaidReady) {
             if (pollTimerRef.current) {
               clearInterval(pollTimerRef.current);
               pollTimerRef.current = null;
             }
             setIsWaitingForAcceptance(false);
+            setIsAwaitingPayment(false);
             const targetId = res.data.bookingId || requestId;
             onClose();
             navigate(`/consultation/${mode}/${targetId}`);
-          } else if (status === 'declined') {
+          } else if (isAwaiting) {
             if (pollTimerRef.current) {
               clearInterval(pollTimerRef.current);
               pollTimerRef.current = null;
             }
             setIsWaitingForAcceptance(false);
+            setIsAwaitingPayment(true);
+            setAcceptedBookingId(res.data.bookingId || requestId);
+          } else if (status === 'declined' || status === 'rejected') {
+            if (pollTimerRef.current) {
+              clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            setIsWaitingForAcceptance(false);
+            setIsAwaitingPayment(false);
             setActiveRequestId(null);
-            setError('Advocate is currently unavailable. Please try another advocate.');
+            setError('Advocate is currently unavailable or declined this request. Please try another advocate.');
           }
         }
       } catch (pollErr: any) {
         console.error('Error polling request status:', pollErr);
       }
-    }, 3000);
+    }, 2500);
   };
 
-  // Send Consultation Request
+  // Send Consultation Request (Zero upfront payment required)
   const handleSendRequest = async () => {
     if (!isAuthenticated) {
       navigate('/login?redirect=lawyers');
@@ -163,9 +180,13 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
 
       const res = await consultationService.createRequest({
         advocateId: lawyer.id,
+        channel: mode,
         mode,
+        durationMins: duration,
         durationMinutes: duration,
+        calculatedFee: sessionFee,
         ratePerMin: perMinute,
+        matterDescription: legalDescription,
       });
 
       if (res.data?.success && res.data?.request?.id) {
@@ -218,12 +239,18 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
             </span>
             <div>
               <h2 className="text-sm font-black text-white sm:text-base">
-                {isWaitingForAcceptance ? 'Consultation Request Dispatched' : 'Instant Advocate Consultation'}
+                {isAwaitingPayment
+                  ? 'Advocate Accepted — Escrow Payment'
+                  : isWaitingForAcceptance
+                  ? 'Consultation Request Dispatched'
+                  : 'Instant Advocate Consultation'}
               </h2>
               <p className="text-[11px] text-[#A39E93]">
-                {isWaitingForAcceptance
+                {isAwaitingPayment
+                  ? 'Complete direct UPI escrow deposit to unlock live consultation room'
+                  : isWaitingForAcceptance
                   ? 'Awaiting direct confirmation from advocate'
-                  : 'Live 1-on-1 Attorney Privileged Session'}
+                  : 'Step 1: Zero Upfront Payment • Attorney-Privileged Session'}
               </p>
             </div>
           </div>
@@ -235,8 +262,78 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
           </button>
         </div>
 
-        {/* WAITING SCREEN (Astrotalk Pulsing Radar) */}
-        {isWaitingForAcceptance ? (
+        {/* STEP 3 SCREEN: ADVOCATE ACCEPTED -> PAY ESCROW VIA UPI */}
+        {isAwaitingPayment ? (
+          <div className="py-6 flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#D4AF37] bg-[#1A1A1A] text-[#D4AF37] shadow-xl">
+              <ShieldCheck className="h-9 w-9 text-[#10B981]" />
+            </div>
+
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#10B981]/40 bg-[#10B981]/10 px-3 py-1 text-xs font-bold text-[#10B981]">
+              <Radio className="h-3.5 w-3.5 animate-pulse text-[#10B981]" />
+              <span>Advocate Accepted Request!</span>
+            </div>
+
+            <h3 className="mt-2 text-lg font-black text-white">
+              Adv. {lawyer.full_name} is Ready
+            </h3>
+            <p className="mt-1 text-xs text-[#A39E93] max-w-sm">
+              Your {duration}-minute {mode === 'call' ? 'Instant Call' : 'Instant Chat'} consultation has been confirmed. Deposit the session fee into JurisFlow Escrow to enter the live room.
+            </p>
+
+            {/* Escrow Fee Card */}
+            <div className="mt-5 w-full rounded-2xl border border-[#262118] bg-[#1A1A1A] p-4 text-xs text-left space-y-2.5">
+              <div className="flex items-center justify-between text-[#A39E93]">
+                <span>Advocate</span>
+                <span className="font-bold text-white">{lawyer.full_name}</span>
+              </div>
+              <div className="flex items-center justify-between text-[#A39E93]">
+                <span>Consultation Mode</span>
+                <span className="font-bold text-[#D4AF37] capitalize flex items-center gap-1">
+                  {mode === 'call' ? <Phone className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
+                  Instant {mode === 'call' ? 'Call' : 'Chat'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[#A39E93]">
+                <span>Duration</span>
+                <span className="font-bold text-white">{duration} Minutes</span>
+              </div>
+              <div className="border-t border-[#262118] pt-2 flex items-center justify-between font-bold">
+                <span className="text-white">Escrow Payable Fee</span>
+                <span className="text-base font-black text-[#D4AF37]">₹{sessionFee}</span>
+              </div>
+            </div>
+
+            {/* Escrow Assurance */}
+            <div className="mt-3 w-full rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/5 p-3 text-[11px] text-[#A39E93] text-left flex items-start gap-2.5">
+              <Lock className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+              <span>
+                <strong className="text-white">100% Escrow Protection:</strong> Funds are held safely in escrow and only released to Adv. {lawyer.full_name} once you conclude the consultation.
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-6 flex flex-col gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={() => setIsUpiModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#D4AF37] py-3.5 text-xs font-black text-[#080808] shadow-lg shadow-[#D4AF37]/20 transition hover:bg-[#AA7C11] active:scale-95"
+              >
+                <QrCode className="h-4 w-4" />
+                <span>Pay ₹{sessionFee} via UPI to Start Consultation</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleModalClose}
+                className="w-full rounded-2xl border border-[#262118] bg-[#121212] py-2.5 text-xs font-semibold text-[#A39E93] hover:text-white hover:border-[#D4AF37]/40"
+              >
+                Decide Later
+              </button>
+            </div>
+          </div>
+        ) : isWaitingForAcceptance ? (
           <div className="py-6 flex flex-col items-center text-center">
             {/* Animated Radar Pulse Container */}
             <div className="relative flex items-center justify-center my-6">
@@ -440,43 +537,18 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
               </div>
             </div>
 
-            {/* Astrotalk Wallet Balance & Direct UPI Bar */}
-            <div className="mt-4 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-3.5 text-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Wallet className="h-4 w-4 text-[#D4AF37]" />
-                  <div>
-                    <span className="font-semibold text-[#A39E93]">Wallet Balance: </span>
-                    <span className="font-black text-[#D4AF37]">₹{(Number(walletBalance) || 0).toFixed(2)}</span>
-                  </div>
+            {/* Step 1 Escrow Notice: Zero Upfront Payment */}
+            <div className="mt-4 rounded-2xl border border-[#D4AF37]/30 bg-[#1A1A1A] p-3.5 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#D4AF37]/40 bg-[#121212] text-[#D4AF37] shrink-0">
+                  <ShieldCheck className="h-4 w-4" />
                 </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsUpiModalOpen(true)}
-                    className="inline-flex items-center gap-1 rounded-xl border border-[#D4AF37]/50 bg-[#121212] px-2.5 py-1 text-[11px] font-bold text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#080808] transition shadow-sm"
-                  >
-                    <QrCode className="h-3 w-3" />
-                    <span>Pay with UPI</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleRechargeWallet}
-                    className="inline-flex items-center gap-1 rounded-xl bg-[#D4AF37] px-2.5 py-1 text-[11px] font-bold text-[#080808] shadow-sm hover:bg-[#AA7C11] transition"
-                  >
-                    <PlusCircle className="h-3 w-3" />
-                    <span>+₹1,000</span>
-                  </button>
+                <div>
+                  <span className="font-bold text-white">Step 1: Zero Upfront Payment</span>
+                  <p className="text-[11px] text-[#A39E93]">
+                    Send your request without paying. You only pay ₹{sessionFee} via Direct UPI into escrow once Adv. {lawyer.full_name} accepts.
+                  </p>
                 </div>
-              </div>
-
-              <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#A39E93]">
-                <span>Talktime Available: ~{maxMinsAvailable} mins</span>
-                {showWalletRecharged && (
-                  <span className="font-bold text-[#10B981] animate-pulse">✓ Wallet updated!</span>
-                )}
               </div>
             </div>
 
@@ -563,10 +635,14 @@ export const AstrotalkPreConsultationModal: React.FC<AstrotalkPreConsultationMod
         amount={sessionFee}
         advocateId={lawyer.id}
         advocateName={lawyer.full_name}
-        purpose={`Legal Consultation with Adv. ${lawyer.full_name}`}
-        onSuccess={(payment) => {
-          setWalletBalance((prev) => prev + Number(payment.amount));
-          setShowWalletRecharged(true);
+        consultationId={acceptedBookingId || activeRequestId || undefined}
+        purpose={`Escrow Legal Consultation with Adv. ${lawyer.full_name}`}
+        onSuccess={() => {
+          setIsUpiModalOpen(false);
+          setIsAwaitingPayment(false);
+          const target = acceptedBookingId || activeRequestId;
+          onClose();
+          navigate(`/consultation/${mode}/${target}`);
         }}
       />
     </div>

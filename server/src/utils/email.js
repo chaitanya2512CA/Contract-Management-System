@@ -543,6 +543,202 @@ View your dashboard: ${appUrl}/client/dashboard
 };
 
 /**
+ * Consultation Accepted Notification Email (Dispatched to Client when Advocate Accepts)
+ */
+export const sendConsultationAcceptedEmail = async ({
+  toEmail,
+  userName = 'Valued Client',
+  advocateName = 'Verified Advocate',
+  channel = 'Chat',
+  durationMins = 15,
+  amount = 499,
+  bookingId,
+}) => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn('[Email Service] Transporter not ready; skipping consultation accepted email.');
+    return { success: false, skipped: true };
+  }
+
+  const rawUser = process.env.EMAIL_USER || 'jurisflow03@gmail.com';
+  let cleanUser = rawUser.trim();
+  if (/@gamil\.com$/i.test(cleanUser)) cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+  const fromAddress = `"JurisFlow Consultations" <${cleanUser}>`;
+  const appUrl = resolveAppUrl();
+  const paymentLink = `${appUrl}/consultation/${channel.toLowerCase()}/${bookingId}?pay=true`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin: 0; padding: 0; background-color: #080808; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #080808; padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 540px; background-color: #121212; border: 1px solid #262118; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td style="padding: 30px; text-align: center; border-bottom: 1px solid #262118;">
+              <span style="font-size: 32px;">⚖️</span>
+              <h2 style="color: #ffffff; margin: 10px 0 4px; font-size: 20px; font-weight: 900;">Consultation Request Accepted</h2>
+              <p style="color: #d4af37; font-size: 13px; font-weight: 700; margin: 0;">Next Step: Complete Direct UPI Payment</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 25px 30px; color: #f5e6c4; font-size: 13px; line-height: 1.6;">
+              <p style="margin-top: 0;">Dear <strong>${escapeHtml(userName)}</strong>,</p>
+              <p>Advocate <strong>${escapeHtml(advocateName)}</strong> has accepted your request for an <strong>Instant ${escapeHtml(channel.toUpperCase())}</strong> consultation (${durationMins} minutes).</p>
+              
+              <div style="background: #181818; border: 1px solid #262118; border-radius: 12px; padding: 15px; margin: 20px 0;">
+                <div style="margin-bottom: 8px;">
+                  <span style="color: #a39e93;">Session Fee:</span>
+                  <strong style="color: #d4af37; font-size: 16px; float: right;">₹${Number(amount).toFixed(2)}</strong>
+                </div>
+                <div style="margin-bottom: 8px; clear: both;">
+                  <span style="color: #a39e93;">Consultation Mode:</span>
+                  <strong style="color: #ffffff; float: right;">${escapeHtml(channel.toUpperCase())} (${durationMins} Mins)</strong>
+                </div>
+                <div style="clear: both;">
+                  <span style="color: #a39e93;">Advocate:</span>
+                  <strong style="color: #ffffff; float: right;">${escapeHtml(advocateName)}</strong>
+                </div>
+                <div style="clear: both;"></div>
+              </div>
+
+              <p style="color: #a39e93; font-size: 12px;">Your payment will be held securely in JurisFlow Escrow and only released once the consultation is completed.</p>
+
+              <div style="text-align: center; margin: 25px 0 10px;">
+                <a href="${paymentLink}" style="display: inline-block; background: #d4af37; color: #080808; font-size: 13px; font-weight: 800; text-decoration: none; padding: 14px 30px; border-radius: 12px;">
+                  Pay ₹${Number(amount).toFixed(2)} via UPI & Start Session
+                </a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 16px; background: #0a0a0a; border-top: 1px solid #262118; text-align: center; color: #666158; font-size: 11px;">
+              &copy; ${new Date().getFullYear()} JurisFlow • Direct UPI Escrow System
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: toEmail,
+      subject: `Adv. ${advocateName} Accepted Your Request — Complete Payment to Connect`,
+      text: `Adv. ${advocateName} accepted your consultation request. Pay ₹${amount} via UPI to join: ${paymentLink}`,
+      html: htmlContent,
+    });
+    console.log(`[Email Service] Consultation accepted email sent to ${toEmail}. MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Service Error] Failed to send accepted email to ${toEmail}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Escrow Payout Released Notification Email (Dispatched to Advocate when Consultation Completes)
+ */
+export const sendEscrowPayoutReleasedEmail = async ({
+  toEmail,
+  advocateName = 'Advocate',
+  clientName = 'Client',
+  grossAmount,
+  platformCommission,
+  netAmount,
+}) => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn('[Email Service] Transporter not ready; skipping escrow release email.');
+    return { success: false, skipped: true };
+  }
+
+  const rawUser = process.env.EMAIL_USER || 'jurisflow03@gmail.com';
+  let cleanUser = rawUser.trim();
+  if (/@gamil\.com$/i.test(cleanUser)) cleanUser = cleanUser.replace(/@gamil\.com$/i, '@gmail.com');
+  const fromAddress = `"JurisFlow Settlements" <${cleanUser}>`;
+  const appUrl = resolveAppUrl();
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin: 0; padding: 0; background-color: #080808; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #080808; padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 540px; background-color: #121212; border: 1px solid #262118; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td style="padding: 30px; text-align: center; border-bottom: 1px solid #262118;">
+              <span style="font-size: 32px;">💰</span>
+              <h2 style="color: #ffffff; margin: 10px 0 4px; font-size: 20px; font-weight: 900;">Consultation Fee Released from Escrow</h2>
+              <p style="color: #10b981; font-size: 13px; font-weight: 700; margin: 0;">Credited to Your JurisFlow Wallet Balance</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 25px 30px; color: #f5e6c4; font-size: 13px; line-height: 1.6;">
+              <p style="margin-top: 0;">Dear <strong>${escapeHtml(advocateName)}</strong>,</p>
+              <p>Your legal consultation with client <strong>${escapeHtml(clientName)}</strong> has been concluded. The held consultation fee has been released from escrow into your available balance.</p>
+              
+              <div style="background: #181818; border: 1px solid #262118; border-radius: 12px; padding: 15px; margin: 20px 0;">
+                <div style="margin-bottom: 8px;">
+                  <span style="color: #a39e93;">Gross Consultation Fee:</span>
+                  <strong style="color: #ffffff; float: right;">₹${Number(grossAmount).toFixed(2)}</strong>
+                </div>
+                <div style="margin-bottom: 8px; clear: both;">
+                  <span style="color: #a39e93;">Platform Commission (15%):</span>
+                  <span style="color: #f87171; float: right;">-₹${Number(platformCommission).toFixed(2)}</span>
+                </div>
+                <div style="border-top: 1px solid #262118; padding-top: 8px; clear: both;">
+                  <strong style="color: #f5e6c4;">Net Credited to Balance:</strong>
+                  <strong style="color: #d4af37; font-size: 16px; float: right;">₹${Number(netAmount).toFixed(2)}</strong>
+                </div>
+                <div style="clear: both;"></div>
+              </div>
+
+              <div style="text-align: center; margin: 25px 0 10px;">
+                <a href="${appUrl}/lawyer/dashboard" style="display: inline-block; background: #d4af37; color: #080808; font-size: 13px; font-weight: 800; text-decoration: none; padding: 14px 30px; border-radius: 12px;">
+                  View Payout Balance & Ledger
+                </a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 16px; background: #0a0a0a; border-top: 1px solid #262118; text-align: center; color: #666158; font-size: 11px;">
+              &copy; ${new Date().getFullYear()} JurisFlow • Institutional Legal Governance
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: toEmail,
+      subject: `JurisFlow Escrow Released: ₹${Number(netAmount).toFixed(2)} Credited for Consultation`,
+      text: `Escrow fee released: ₹${netAmount} credited to your JurisFlow balance. View: ${appUrl}/lawyer/dashboard`,
+      html: htmlContent,
+    });
+    console.log(`[Email Service] Escrow release email dispatched to ${toEmail}. MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Service Error] Failed to send escrow release email to ${toEmail}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
  * Escapes HTML characters for safe template rendering
  */
 function escapeHtml(string) {
@@ -561,5 +757,7 @@ export default {
   sendWelcomeEmail,
   sendOtpEmail,
   sendPaymentConfirmationEmail,
+  sendConsultationAcceptedEmail,
+  sendEscrowPayoutReleasedEmail,
   resolveAppUrl,
 };
