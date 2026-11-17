@@ -10,6 +10,8 @@ import {
   Zap,
   Loader2,
   User,
+  AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { consultationService } from '../../services/api';
@@ -39,6 +41,9 @@ export const IncomingConsultationModal: React.FC = () => {
 
   const [incomingRequests, setIncomingRequests] = useState<ConsultationRequestItem[]>([]);
   const [isResponding, setIsResponding] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [acceptedRequest, setAcceptedRequest] = useState<ConsultationRequestItem | null>(null);
+  const acceptedIdsRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<any>(null);
 
   // Poll for incoming requests only if authenticated lawyer
@@ -56,7 +61,11 @@ export const IncomingConsultationModal: React.FC = () => {
       try {
         const res = await consultationService.getIncomingRequests();
         if (res.data?.success && Array.isArray(res.data.requests)) {
-          setIncomingRequests(res.data.requests);
+          // Filter out requests already handled/accepted in this session
+          const active = res.data.requests.filter(
+            (r: ConsultationRequestItem) => !acceptedIdsRef.current.has(r.id)
+          );
+          setIncomingRequests(active);
         }
       } catch (err) {
         // Silently catch background poll errors
@@ -77,6 +86,77 @@ export const IncomingConsultationModal: React.FC = () => {
   // Current request to display
   const currentRequest = incomingRequests.length > 0 ? incomingRequests[0] : null;
 
+  // Screen 1: Waiting for client UPI payment after advocate accepted
+  if (acceptedRequest) {
+    const reqMode = acceptedRequest.channel || acceptedRequest.mode || 'chat';
+    const duration = acceptedRequest.duration_mins || acceptedRequest.duration_minutes || 15;
+    const calcFee = Number(acceptedRequest.calculated_fee);
+    const totalFee = (!isNaN(calcFee) && calcFee > 0
+      ? calcFee
+      : (Number(acceptedRequest.rate_per_min) || 25) * duration).toFixed(2);
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="relative w-full max-w-md rounded-3xl border border-[#D4AF37]/50 bg-[#121212] p-6 shadow-2xl text-[#F5E6C4] shadow-[#D4AF37]/10 ring-1 ring-[#D4AF37]/30 text-center">
+          {/* Pulsing Gold Header */}
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-[#D4AF37]/40 bg-gradient-to-br from-[#1A1A1A] to-[#121212] text-[#D4AF37] shadow-xl mb-4">
+            <Clock className="h-8 w-8 text-[#D4AF37] animate-pulse" />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/40 bg-[#1A1A1A] px-3 py-1 text-xs font-bold text-[#D4AF37] mb-2">
+            <Zap className="h-3.5 w-3.5 fill-[#D4AF37]" />
+            <span>Request Accepted</span>
+          </div>
+
+          <h3 className="text-lg font-black text-white">
+            Waiting for Client UPI Payment (₹{totalFee})
+          </h3>
+          <p className="mt-2 text-xs text-[#A39E93] leading-relaxed">
+            Request accepted! The client has been notified to complete the ₹{totalFee} payment to JurisFlow Escrow (<strong className="text-white font-mono">7558343192-1@nyes</strong>). The consultation room will unlock once payment is confirmed.
+          </p>
+
+          {/* Client & Matter Details Card */}
+          <div className="mt-4 rounded-2xl border border-[#262118] bg-[#1A1A1A] p-4 text-xs space-y-2 text-left">
+            <div className="flex items-center justify-between text-[#A39E93]">
+              <span>Client</span>
+              <span className="font-bold text-white">{acceptedRequest.client_name || 'Client User'}</span>
+            </div>
+            <div className="flex items-center justify-between text-[#A39E93]">
+              <span>Channel & Duration</span>
+              <span className="font-bold text-[#D4AF37] capitalize flex items-center gap-1">
+                {reqMode === 'call' ? <Phone className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
+                Instant {reqMode} ({duration} mins)
+              </span>
+            </div>
+            {(acceptedRequest.matter_description || acceptedRequest.legal_issue_description) && (
+              <div className="border-t border-[#262118] pt-2 text-[#A39E93]">
+                <span className="font-semibold text-slate-400">Legal Matter: </span>
+                <span className="text-white font-medium">
+                  {acceptedRequest.matter_description || acceptedRequest.legal_issue_description}
+                </span>
+              </div>
+            )}
+            <div className="border-t border-[#262118] pt-2 flex items-center justify-between font-bold text-white">
+              <span>Escrow Fee Payable</span>
+              <span className="text-sm font-black text-[#10B981]">₹{totalFee}</span>
+            </div>
+          </div>
+
+          {/* Dismiss Button */}
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => setAcceptedRequest(null)}
+              className="w-full rounded-2xl bg-[#D4AF37] py-3 text-xs font-black text-[#080808] shadow-lg shadow-[#D4AF37]/20 transition hover:bg-[#AA7C11] active:scale-95"
+            >
+              Done — Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentRequest) return null;
 
   const mode = currentRequest.channel || currentRequest.mode || 'chat';
@@ -88,19 +168,31 @@ export const IncomingConsultationModal: React.FC = () => {
     : (Number(currentRequest.rate_per_min) || 25) * durationMins).toFixed(2);
 
   const handleRespond = async (action: 'accept' | 'decline') => {
+    setErrorMessage(null);
     try {
       setIsResponding(true);
       const res = await consultationService.respondToRequest(currentRequest.id, action);
 
-      // Remove handled request from local state immediately
-      setIncomingRequests((prev) => prev.filter((r) => r.id !== currentRequest.id));
+      if (res.data?.success || res.status === 200) {
+        acceptedIdsRef.current.add(currentRequest.id);
+        setIncomingRequests((prev) => prev.filter((r) => r.id !== currentRequest.id));
 
-      if (action === 'accept' && res.data?.success) {
-        const destinationId = res.data.bookingId || currentRequest.id;
-        navigate(`/consultation/${mode}/${destinationId}`);
+        if (action === 'accept') {
+          setAcceptedRequest(currentRequest);
+        } else {
+          setAcceptedRequest(null);
+        }
+      } else {
+        setErrorMessage(res.data?.error || res.data?.message || 'Failed to accept consultation request.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error responding to consultation request:', err);
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to accept request. Please try again.';
+      setErrorMessage(msg);
     } finally {
       setIsResponding(false);
     }
@@ -193,6 +285,14 @@ export const IncomingConsultationModal: React.FC = () => {
           </div>
         </div>
 
+        {/* Error Feedback Banner */}
+        {errorMessage && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-900/60 bg-rose-950/40 p-3 text-xs text-rose-300">
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+            <span className="leading-snug">{errorMessage}</span>
+          </div>
+        )}
+
         {/* Action Buttons: Accept & Decline */}
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
@@ -219,14 +319,14 @@ export const IncomingConsultationModal: React.FC = () => {
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4 text-black" />
-                <span>Accept (Start)</span>
+                <span>Accept Request</span>
               </>
             )}
           </button>
         </div>
 
         <p className="mt-3 text-center text-[10px] text-[#A39E93]">
-          Accepting will start the billable session and open the consultation room immediately.
+          Accepting will notify the client to complete the ₹{estTotal} UPI payment before the consultation room opens.
         </p>
       </div>
     </div>

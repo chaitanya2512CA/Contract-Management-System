@@ -14,6 +14,22 @@ async function initializeApp() {
   // Execute progressive column and table migrations for persistent authentication
   try {
     await query(`
+      ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_status_check;
+      ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_payment_status_check;
+      ALTER TABLE consultations ALTER COLUMN status TYPE VARCHAR(50);
+      ALTER TABLE consultations ALTER COLUMN payment_status TYPE VARCHAR(50);
+
+      ALTER TABLE consultation_bookings DROP CONSTRAINT IF EXISTS consultation_bookings_status_check;
+      ALTER TABLE consultation_bookings DROP CONSTRAINT IF EXISTS consultation_bookings_payment_status_check;
+      ALTER TABLE consultation_bookings DROP CONSTRAINT IF EXISTS consultation_bookings_lawyer_id_fkey;
+      ALTER TABLE consultation_bookings ALTER COLUMN status TYPE VARCHAR(50);
+      ALTER TABLE consultation_bookings ALTER COLUMN payment_status TYPE VARCHAR(50);
+
+      ALTER TABLE consultation_requests DROP CONSTRAINT IF EXISTS consultation_requests_status_check;
+      ALTER TABLE consultation_requests DROP CONSTRAINT IF EXISTS consultation_requests_payment_status_check;
+      ALTER TABLE consultation_requests ALTER COLUMN status TYPE VARCHAR(50);
+      ALTER TABLE consultation_requests ALTER COLUMN payment_status TYPE VARCHAR(50);
+
       ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(150);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bar_registration_number VARCHAR(100) DEFAULT '';

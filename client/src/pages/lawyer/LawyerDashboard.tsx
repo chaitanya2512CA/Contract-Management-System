@@ -97,9 +97,8 @@ export const LawyerDashboard: React.FC = () => {
       const res = await consultationService.respondToRequest(requestId, 'accept');
       if (res.data?.success) {
         setIncomingRequests((prev) => prev.filter((r) => r.id !== requestId));
-        const destinationId = res.data.bookingId || requestId;
         fetchLawyerData();
-        navigate(`/consultation/${reqMode || 'chat'}/${destinationId}`);
+        alert('Consultation request accepted! The client has been notified to complete direct UPI escrow payment.');
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to accept consultation request.');

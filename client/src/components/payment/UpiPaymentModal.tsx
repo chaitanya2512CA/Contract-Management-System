@@ -275,7 +275,7 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
               onClick={() => setStep('utr')}
               className="flex items-center justify-center gap-2 w-full rounded-2xl border border-[#D4AF37]/50 bg-[#1A1A1A] py-3 text-xs font-bold text-[#F5E6C4] hover:bg-[#262118] hover:text-white transition"
             >
-              <span>I Have Completed Payment — Enter 12-Digit UTR</span>
+              <span>I Have Completed Payment → Enter 12-Digit UTR</span>
               <ArrowRight className="h-4 w-4 text-[#D4AF37]" />
             </button>
           </div>
@@ -357,7 +357,7 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    <span>Confirm & Verify UTR</span>
+                    <span>I Have Completed Payment → Unlock Consultation</span>
                   </>
                 )}
               </button>

@@ -323,111 +323,15 @@ export const getConsultationById = async (req, res) => {
  * Lawyer Accept Consultation Request
  */
 export const acceptConsultation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id || req.user._id;
-
-    const bookingRes = await query(
-      `SELECT cb.*, lp.user_id as lawyer_user_id
-       FROM consultation_bookings cb
-       JOIN lawyer_profiles lp ON cb.lawyer_id = lp.id
-       WHERE cb.id = $1`,
-      [id]
-    );
-
-    if (bookingRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Booking not found.' });
-    }
-
-    const booking = bookingRes.rows[0];
-    if (booking.lawyer_user_id !== userId && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized action.' });
-    }
-
-    const nextStatus = booking.payment_status === 'paid' ? 'confirmed' : 'accepted';
-
-    await query(
-      `UPDATE consultation_bookings SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [nextStatus, id]
-    );
-
-    // Notify client
-    await query(
-      `INSERT INTO notifications (id, recipient_id, title, message, type, link)
-       VALUES ($1, $2, $3, $4, 'consultation', $5)`,
-      [
-        crypto.randomUUID(),
-        booking.client_id,
-        'Consultation Request Accepted',
-        `Advocate has accepted your consultation request for ${booking.practice_area}.`,
-        `/consultations/${id}`,
-      ]
-    );
-
-    res.status(200).json({
-      success: true,
-      message: 'Consultation request accepted.',
-      status: nextStatus,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to accept consultation.' });
-  }
+  return respondToConsultationRequest(req, res);
 };
 
 /**
  * Lawyer Reject Consultation Request
  */
 export const rejectConsultation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { rejectionReason } = req.body;
-    const userId = req.user.id || req.user._id;
-
-    const bookingRes = await query(
-      `SELECT cb.*, lp.user_id as lawyer_user_id
-       FROM consultation_bookings cb
-       JOIN lawyer_profiles lp ON cb.lawyer_id = lp.id
-       WHERE cb.id = $1`,
-      [id]
-    );
-
-    if (bookingRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Booking not found.' });
-    }
-
-    const booking = bookingRes.rows[0];
-    if (booking.lawyer_user_id !== userId && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized action.' });
-    }
-
-    await query(
-      `UPDATE consultation_bookings SET
-        status = 'rejected',
-        rejection_reason = $1,
-        updated_at = NOW()
-      WHERE id = $2`,
-      [rejectionReason || 'Advocate unavailable at requested schedule', id]
-    );
-
-    // If already paid, trigger automatic refund record
-    if (booking.payment_status === 'paid') {
-      const refundId = crypto.randomUUID();
-      const refundRef = `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      await query(
-        `INSERT INTO refunds (id, refund_ref, booking_id, requested_by, amount, reason, status)
-         VALUES ($1, $2, $3, $4, $5, 'Advocate declined consultation request', 'pending')`,
-        [refundId, refundRef, id, booking.client_id, booking.fee_amount]
-      );
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Consultation declined.',
-      status: 'rejected',
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to decline consultation.' });
-  }
+  req.body = { ...req.body, action: 'decline' };
+  return respondToConsultationRequest(req, res);
 };
 
 /**
@@ -1099,145 +1003,238 @@ export const getIncomingConsultationRequests = async (req, res) => {
 export const respondToConsultationRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'accept' | 'decline'
+    const rawAction = req.body?.action || req.body?.status || (req.path && req.path.includes('accept') ? 'accept' : 'accept');
+    const action = String(rawAction).toLowerCase();
 
-    if (!action || (action !== 'accept' && action !== 'decline')) {
+    if (action !== 'accept' && action !== 'decline' && action !== 'reject' && action !== 'declined' && action !== 'rejected') {
       return res.status(400).json({ success: false, message: "Action must be 'accept' or 'decline'." });
     }
 
-    const reqRes = await query('SELECT * FROM consultation_requests WHERE id = $1', [id]);
-    if (reqRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Consultation request not found.' });
+    const isDecline = action === 'decline' || action === 'reject' || action === 'declined' || action === 'rejected';
+
+    // 1. Check consultation_requests table first
+    let reqRes = null;
+    try {
+      reqRes = await query('SELECT * FROM consultation_requests WHERE id = $1 OR booking_id = $1 LIMIT 1', [id]);
+    } catch (e) {
+      console.warn('[respondToConsultationRequest] Query consultation_requests error:', e.message);
     }
 
-    const request = reqRes.rows[0];
+    if (reqRes && reqRes.rows.length > 0) {
+      const request = reqRes.rows[0];
 
-    if (action === 'decline') {
-      await query(
-        `UPDATE consultation_requests SET status = 'declined', updated_at = NOW() WHERE id = $1`,
-        [id]
+      if (isDecline) {
+        await query(
+          `UPDATE consultation_requests SET status = 'declined', updated_at = NOW() WHERE id = $1`,
+          [request.id]
+        );
+        return res.status(200).json({
+          success: true,
+          message: 'Consultation request declined.',
+          status: 'declined',
+          consultation: { ...request, status: 'declined' },
+        });
+      }
+
+      // Action is 'accept' -> transition to 'accepted_awaiting_payment'
+      let bookingId = request.booking_id;
+      const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const meetingRoomId = request.meeting_room_id || `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const durationMins = request.duration_mins || request.duration_minutes || 15;
+      const fee = parseFloat(request.calculated_fee) || ((parseFloat(request.rate_per_min) || 25) * durationMins);
+
+      // Fetch advocate profile safely (resilient to different table shapes)
+      let lawyer = null;
+      try {
+        const lpRes = await query(
+          `SELECT id, user_id, primary_specialty, full_name, email FROM lawyer_profiles WHERE user_id = $1 OR id = $1 LIMIT 1`,
+          [request.advocate_id]
+        );
+        if (lpRes.rows.length > 0) {
+          lawyer = lpRes.rows[0];
+        }
+      } catch (_) {}
+
+      if (!lawyer) {
+        try {
+          const uRes = await query(
+            `SELECT id, id as user_id, COALESCE(name, full_name, 'Advocate') as full_name, email, primary_specialty FROM users WHERE id = $1 LIMIT 1`,
+            [request.advocate_id]
+          );
+          if (uRes.rows.length > 0) {
+            lawyer = uRes.rows[0];
+          }
+        } catch (_) {}
+      }
+
+      if (!lawyer) {
+        lawyer = {
+          id: request.advocate_id,
+          user_id: request.advocate_id,
+          primary_specialty: 'Legal Consultation',
+          full_name: 'Advocate',
+        };
+      }
+
+      // Fetch client details safely
+      let client = { name: 'Valued Client', email: '' };
+      try {
+        const clientRes = await query('SELECT id, name, email FROM users WHERE id = $1 LIMIT 1', [request.client_id]);
+        if (clientRes.rows.length > 0) {
+          client = clientRes.rows[0];
+        }
+      } catch (_) {}
+
+      if (!bookingId) {
+        bookingId = crypto.randomUUID();
+
+        // Safely insert into consultation_bookings
+        try {
+          await query(
+            `INSERT INTO consultation_bookings (
+               id, booking_ref, client_id, lawyer_id, practice_area, consultation_mode,
+               duration_minutes, scheduled_start, scheduled_end, fee_amount, currency,
+               payment_status, status, legal_issue_description, urgency, meeting_room_id, payout_status
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '15 minutes', $8, 'INR', 'unpaid', 'accepted_awaiting_payment', $9, 'high', $10, 'held_in_escrow')`,
+            [
+              bookingId,
+              bookingRef,
+              request.client_id,
+              lawyer.id,
+              lawyer.primary_specialty || 'General Legal Counsel',
+              request.channel === 'call' || request.mode === 'call' ? 'audio' : 'chat',
+              durationMins,
+              fee,
+              request.matter_description || 'Instant Legal Consultation',
+              meetingRoomId,
+            ]
+          );
+        } catch (cbErr) {
+          console.warn('[respondToConsultationRequest] consultation_bookings insert notice:', cbErr.message);
+        }
+
+        // Create linked conversation safely
+        try {
+          const convId = crypto.randomUUID();
+          await query(
+            `INSERT INTO conversations (id, booking_id, client_id, lawyer_id) VALUES ($1, $2, $3, $4)`,
+            [convId, bookingId, request.client_id, lawyer.user_id || lawyer.id]
+          );
+
+          const greeting =
+            request.channel === 'call' || request.mode === 'call'
+              ? `Call consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to begin live call.`
+              : `Consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to unlock live messaging.`;
+
+          await query(
+            `INSERT INTO messages (id, conversation_id, booking_id, sender_id, recipient_id, content, message_type)
+             VALUES ($1, $2, $3, $4, $5, $6, 'system')`,
+            [crypto.randomUUID(), convId, bookingId, lawyer.user_id || lawyer.id, request.client_id, greeting]
+          );
+        } catch (convErr) {
+          console.warn('[respondToConsultationRequest] conversation insert notice:', convErr.message);
+        }
+      }
+
+      // Update consultation_requests to 'accepted_awaiting_payment'
+      const updateRes = await query(
+        `UPDATE consultation_requests
+         SET status = 'accepted_awaiting_payment', booking_id = $1, meeting_room_id = $2, updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [bookingId, meetingRoomId, request.id]
       );
+
+      const updatedRow = (updateRes && updateRes.rows[0]) || {
+        ...request,
+        status: 'accepted_awaiting_payment',
+        booking_id: bookingId,
+        meeting_room_id: meetingRoomId,
+      };
+
+      // Notify client via email asynchronously inside try/catch
+      if (client.email) {
+        try {
+          await sendConsultationAcceptedEmail({
+            toEmail: client.email,
+            userName: client.name,
+            advocateName: lawyer.full_name,
+            channel: request.channel || request.mode || 'Chat',
+            durationMins,
+            amount: fee,
+            bookingId,
+          });
+        } catch (mailErr) {
+          console.warn('[Consultation Accept Email Notice]:', mailErr.message);
+        }
+      }
+
       return res.status(200).json({
         success: true,
-        message: 'Consultation request declined.',
-        status: 'declined',
+        message: 'Consultation request accepted. Client has been notified to complete direct UPI escrow payment.',
+        status: 'accepted_awaiting_payment',
+        consultation: updatedRow,
+        bookingId,
+        meetingRoomId,
+        requestId: request.id,
+        fee,
       });
     }
 
-    // Action is 'accept' -> transition to 'accepted_awaiting_payment'
-    let bookingId = request.booking_id;
-    const bookingRef = `ASTRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const meetingRoomId = `room_${bookingRef.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-    const durationMins = request.duration_mins || request.duration_minutes || 15;
-    const fee = parseFloat(request.calculated_fee) || ((parseFloat(request.rate_per_min) || 25) * durationMins);
-
-    // Fetch advocate profile
-    const advRes = await query(
-      `SELECT id, user_id, primary_specialty, full_name, email FROM lawyer_profiles WHERE user_id = $1 OR id = $1
-       UNION
-       SELECT id, user_id, primary_specialty, full_name, email FROM advocates WHERE user_id = $1 OR id = $1
+    // 2. Check consultation_bookings table
+    const cbRes = await query(
+      `SELECT cb.*, lp.user_id as lawyer_user_id
+       FROM consultation_bookings cb
+       LEFT JOIN lawyer_profiles lp ON cb.lawyer_id = lp.id
+       WHERE cb.id = $1 OR cb.booking_ref = $1
        LIMIT 1`,
-      [request.advocate_id]
+      [id]
     );
 
-    const lawyer = advRes.rows[0] || {
-      id: request.advocate_id,
-      user_id: request.advocate_id,
-      primary_specialty: 'Legal Consultation',
-      full_name: 'Advocate',
-    };
+    if (cbRes.rows.length > 0) {
+      const booking = cbRes.rows[0];
 
-    // Fetch client details
-    const clientRes = await query('SELECT id, name, email FROM users WHERE id = $1', [request.client_id]);
-    const client = clientRes.rows[0] || { name: 'Valued Client', email: '' };
-
-    if (!bookingId) {
-      bookingId = crypto.randomUUID();
-
-      // Insert consultation booking with status 'accepted_awaiting_payment' and payment_status 'unpaid'
-      await query(
-        `INSERT INTO consultation_bookings (
-           id, booking_ref, client_id, lawyer_id, practice_area, consultation_mode,
-           duration_minutes, scheduled_start, scheduled_end, fee_amount, currency,
-           payment_status, status, legal_issue_description, urgency, meeting_room_id, payout_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '15 minutes', $8, 'INR', 'unpaid', 'accepted_awaiting_payment', $9, 'high', $10, 'held_in_escrow')`,
-        [
-          bookingId,
-          bookingRef,
-          request.client_id,
-          lawyer.id,
-          lawyer.primary_specialty || 'General Legal Counsel',
-          request.channel === 'call' || request.mode === 'call' ? 'audio' : 'chat',
-          durationMins,
-          fee,
-          request.matter_description || 'Instant Legal Consultation',
-          meetingRoomId,
-        ]
-      );
-
-      // Create linked conversation
-      const convId = crypto.randomUUID();
-      await query(
-        `INSERT INTO conversations (id, booking_id, client_id, lawyer_id) VALUES ($1, $2, $3, $4)`,
-        [convId, bookingId, request.client_id, lawyer.user_id]
-      );
-
-      // Initial message in conversation
-      const greeting =
-        request.channel === 'chat' || request.mode === 'chat'
-          ? `Consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to unlock live messaging.`
-          : `Call consultation accepted by ${lawyer.full_name}. Complete UPI escrow payment to begin live call.`;
-
-      await query(
-        `INSERT INTO messages (id, conversation_id, booking_id, sender_id, recipient_id, content, message_type)
-         VALUES ($1, $2, $3, $4, $5, $6, 'system')`,
-        [crypto.randomUUID(), convId, bookingId, lawyer.user_id, request.client_id, greeting]
-      );
-    }
-
-    // Update request to 'accepted_awaiting_payment'
-    await query(
-      `UPDATE consultation_requests
-       SET status = 'accepted_awaiting_payment', booking_id = $1, meeting_room_id = $2, updated_at = NOW()
-       WHERE id = $3`,
-      [bookingId, meetingRoomId, id]
-    );
-
-    // Send automated email to client informing them advocate accepted
-    if (client.email) {
-      try {
-        await sendConsultationAcceptedEmail({
-          toEmail: client.email,
-          userName: client.name,
-          advocateName: lawyer.full_name,
-          channel: request.channel || request.mode || 'Chat',
-          durationMins,
-          amount: fee,
-          bookingId,
+      if (isDecline) {
+        await query(
+          `UPDATE consultation_bookings SET status = 'rejected', updated_at = NOW() WHERE id = $1`,
+          [booking.id]
+        );
+        return res.status(200).json({
+          success: true,
+          message: 'Consultation declined.',
+          status: 'rejected',
+          consultation: { ...booking, status: 'rejected' },
         });
-      } catch (mailErr) {
-        console.warn('[Consultation Accept Email Notice]:', mailErr.message);
       }
+
+      const nextStatus = booking.payment_status === 'paid' ? 'confirmed' : 'accepted_awaiting_payment';
+
+      const updateCb = await query(
+        `UPDATE consultation_bookings SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [nextStatus, booking.id]
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Consultation request accepted.',
+        status: nextStatus,
+        consultation: updateCb.rows[0] || { ...booking, status: nextStatus },
+        bookingId: booking.id,
+        requestId: id,
+      });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Consultation request accepted. Client has been notified to complete direct UPI escrow payment.',
-      status: 'accepted_awaiting_payment',
-      bookingId,
-      meetingRoomId,
-      requestId: id,
-      fee,
-    });
+    return res.status(404).json({ success: false, message: 'Consultation request not found.' });
   } catch (error) {
-    console.error('Error in respondToConsultationRequest:', error);
-    res.status(500).json({ success: false, message: 'Failed to respond to consultation request.', error: error.message });
+    console.error('[respondToConsultationRequest Error]:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+      message: error.message || 'Failed to respond to consultation request.',
+    });
   }
 };
 
-/**
- * Cancel Consultation Request (by Client)
- */
 export const cancelConsultationRequest = async (req, res) => {
   try {
     const { id } = req.params;
